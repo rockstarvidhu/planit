@@ -5,25 +5,30 @@ import MapView from './components/MapView';
 import SplashScreen from './components/SplashScreen';
 
 function App() {
-  const [userInput, setUserInput] = useState(null);
   const [itinerary, setItinerary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showSplash, setShowSplash] = useState(true);
-  const [currentStep, setCurrentStep] = useState('input'); // 'input', 'loading', 'result'
+  const [currentStep, setCurrentStep] = useState('input'); 
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 5000); // 5 seconds
+    const timer = setTimeout(() => setShowSplash(false), 5000); 
     return () => clearTimeout(timer);
   }, []);
 
   if (showSplash) return <SplashScreen />;
 
-  const handleItineraryGenerated = (itinerary, totalCost) => {
-    setItinerary({ itinerary, totalCost });
+  // FIX: Accept the FULL data object (including aiSummary)
+  const handleItineraryGenerated = (fullData) => {
+    setItinerary(fullData); 
     setLoading(false);
     setError(null);
     setCurrentStep('result');
+  };
+
+  const handleError = (msg) => {
+    setLoading(false);
+    setError(msg);
   };
 
   const handleStartOver = () => {
@@ -34,27 +39,29 @@ function App() {
 
   const handleFormSubmit = () => {
     setLoading(true);
-    // Do NOT set currentStep here; let UserInputForm handle its own steps
+    setError(null);
   };
 
   return (
-    <div className="min-h-screen bg-black font-sans">
+    <div className="min-h-screen bg-black bg-grid-pattern font-sans relative overflow-x-hidden selection:bg-blue-500/30">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black/0 to-black pointer-events-none fixed" />
+
       {/* Header */}
-      <header className="bg-gray-900/80 backdrop-blur-md border-b border-gray-800 sticky top-0 z-50">
+      <header className="glass-card sticky top-0 z-50 border-t-0 border-x-0 rounded-none">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">P</span>
+          <div className="flex justify-between items-center h-20">
+            <div className="flex items-center space-x-3 group cursor-pointer" onClick={handleStartOver}>
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.4)] group-hover:shadow-[0_0_25px_rgba(37,99,235,0.6)] transition-all duration-300">
+                <span className="text-white font-black font-display text-xl">P</span>
               </div>
-              <h1 className="text-xl font-black bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <h1 className="text-2xl font-black font-display bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent tracking-tight group-hover:text-glow transition-all duration-300">
                 Planit
               </h1>
             </div>
-            {itinerary && (
+            {currentStep === 'result' && (
               <button
                 onClick={handleStartOver}
-                className="px-4 py-2 text-sm font-bold text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+                className="px-5 py-2 text-sm font-bold text-gray-300 hover:text-white border border-white/10 hover:bg-white/5 rounded-lg transition-all duration-200 backdrop-blur-sm"
               >
                 Start Over
               </button>
@@ -64,89 +71,91 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-10">
+        
         {/* Step Indicator */}
-        {currentStep !== 'input' && (
-          <div className="mb-8">
-            <div className="flex items-center justify-center space-x-4">
-              <div className={`flex items-center ${currentStep === 'input' ? 'text-blue-500' : 'text-gray-500'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black ${
-                  currentStep === 'input' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'
-                }`}>
-                  1
-                </div>
-                <span className="ml-2 text-sm font-bold">Input Details</span>
-              </div>
-              <div className="w-8 h-0.5 bg-gray-700"></div>
-              <div className={`flex items-center ${currentStep === 'loading' ? 'text-blue-500' : currentStep === 'result' ? 'text-green-500' : 'text-gray-500'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black ${
-                  currentStep === 'loading' ? 'bg-blue-600 text-white' : currentStep === 'result' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400'
-                }`}>
-                  2
-                </div>
-                <span className="ml-2 text-sm font-bold">Generate Plan</span>
-              </div>
-              <div className="w-8 h-0.5 bg-gray-700"></div>
-              <div className={`flex items-center ${currentStep === 'result' ? 'text-green-500' : 'text-gray-500'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black ${
-                  currentStep === 'result' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400'
-                }`}>
-                  3
-                </div>
-                <span className="ml-2 text-sm font-bold">View Results</span>
-              </div>
+        {currentStep !== 'result' && (
+          <div className="mb-12">
+            <div className="flex items-center justify-center space-x-6">
+              {[
+                { step: 'input', num: 1, label: 'Input Details' },
+                { step: 'loading', num: 2, label: 'Generate' },
+                { step: 'result', num: 3, label: 'Results' }
+              ].map((item, idx) => (
+                <React.Fragment key={item.step}>
+                  <div className={`flex items-center group ${currentStep === item.step ? 'text-blue-400 text-glow' : 'text-gray-600'}`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-black transition-all duration-300 ${
+                      currentStep === item.step 
+                        ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] scale-110' 
+                        : 'bg-gray-800 border border-gray-700'
+                    }`}>
+                      {item.num}
+                    </div>
+                    <span className="ml-3 text-sm font-bold hidden sm:block">{item.label}</span>
+                  </div>
+                  {idx < 2 && <div className="w-12 h-0.5 bg-gray-800 rounded-full"></div>}
+                </React.Fragment>
+              ))}
             </div>
           </div>
         )}
 
-        {/* Always show the form unless on result page */}
-        {currentStep !== 'result' && (
-          <UserInputForm 
-            onItineraryGenerated={handleItineraryGenerated}
-            onSubmit={handleFormSubmit}
-          />
-        )}
-
         {/* Loading Screen */}
         {loading && (
-          <div className="text-center py-16">
-            <div className="inline-flex items-center px-4 py-2 font-bold leading-6 text-blue-400 transition ease-in-out duration-150">
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Crafting your perfect itinerary...
+          <div className="text-center py-20 animate-fade-in-up">
+            <div className="inline-flex flex-col items-center">
+              <div className="relative w-20 h-20 mb-6">
+                <div className="absolute inset-0 border-4 border-blue-500/30 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full loader-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-2xl">✨</span>
+                </div>
+              </div>
+              <h3 className="text-2xl font-black font-display text-white mb-2 text-glow">Crafting your perfect trip...</h3>
+              <p className="text-blue-300/80 font-medium">Consulting AI & Analyzing Routes</p>
             </div>
-            <p className="mt-4 text-gray-400 font-medium">This may take a few moments</p>
           </div>
         )}
 
         {/* Error Display */}
         {error && (
-          <div className="bg-red-900/50 border border-red-700 rounded-lg p-4 mb-6">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-bold text-red-300">Error</h3>
-                <div className="mt-2 text-sm text-red-200">{error}</div>
-              </div>
+          <div className="glass-card border-red-500/30 bg-red-900/20 p-6 mb-8 rounded-2xl flex items-start space-x-4 animate-fade-in-up">
+            <div className="p-2 bg-red-500/20 rounded-lg text-red-400">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-red-200">Something went wrong</h3>
+              <p className="text-red-300/80 mt-1">{error}</p>
+              <button 
+                onClick={() => { setError(null); setLoading(false); }} 
+                className="mt-2 text-sm font-bold text-red-400 hover:text-red-300 underline"
+              >
+                Dismiss
+              </button>
             </div>
           </div>
         )}
 
+        {/* Input Form */}
+        {!loading && currentStep !== 'result' && (
+          <UserInputForm 
+            onItineraryGenerated={handleItineraryGenerated}
+            onSubmit={handleFormSubmit}
+            onError={handleError}
+          />
+        )}
+
         {/* Results */}
         {currentStep === 'result' && itinerary && (
-          <div className="space-y-8">
-            <div className="text-center">
-              <h2 className="text-4xl font-black text-white mb-4">
-                Your Personalized Itinerary
+          <div className="space-y-12 animate-fade-in-up">
+            <div className="text-center mb-10">
+              <h2 className="text-5xl font-black font-display text-white mb-4 tracking-tight text-glow">
+                Your Itinerary is Ready
               </h2>
-              <p className="text-xl text-gray-300 font-medium">
-                Here's your perfect day out, tailored just for you!
+              <p className="text-xl text-gray-400 font-medium max-w-2xl mx-auto">
+                We've organized the perfect plan within your budget.
               </p>
             </div>
             <ItineraryDisplay itinerary={itinerary} />
@@ -156,10 +165,10 @@ function App() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-900/80 backdrop-blur-md border-t border-gray-800 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="text-center text-gray-400 text-sm font-medium">
-            <p>&copy; {new Date().getFullYear()} Planit. Made with ❤️ for amazing experiences.</p>
+      <footer className="glass-card mt-20 border-b-0 border-x-0 rounded-none">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col md:flex-row justify-between items-center text-sm font-medium text-gray-500">
+            <p>&copy; {new Date().getFullYear()} Planit. All rights reserved.</p>
           </div>
         </div>
       </footer>
@@ -167,4 +176,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

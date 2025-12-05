@@ -1,93 +1,99 @@
-// src/components/SplashScreen.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function SplashScreen() {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-black relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-600/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-600/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
-      </div>
+  const [progress, setProgress] = useState(0);
+  const [loadingStep, setLoadingStep] = useState(0);
 
-      {/* Main content */}
-      <div className="relative z-10 text-center">
-        {/* Logo */}
-        <div className="mb-8">
-          <div className="w-24 h-24 bg-gradient-to-r from-blue-600 to-purple-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl border border-blue-500/30">
-            <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 4m0 13V4m-6 3l6-3" />
+  const steps = [
+    "Initializing Planit AI...",
+    "Connecting to Satellite Grid...",
+    "Calibrating Local Maps...",
+    "Fetching Weather Patterns...",
+    "Optimizing Travel Routes...",
+    "Ready to Explore."
+  ];
+
+  useEffect(() => {
+    // Progress Bar Animation (0% to 100% over ~4 seconds)
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          return 100;
+        }
+        // Randomize speed slightly for realism
+        return prev + Math.random() * 2;
+      });
+    }, 50);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // Text Cycling Animation
+    if (progress < 100) {
+      const stepIndex = Math.min(
+        Math.floor((progress / 100) * (steps.length - 1)),
+        steps.length - 2
+      );
+      setLoadingStep(stepIndex);
+    } else {
+      setLoadingStep(steps.length - 1);
+    }
+  }, [progress]);
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-black bg-grid-pattern relative overflow-hidden font-sans">
+      
+      {/* Background Spotlight */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black/0 to-black pointer-events-none"></div>
+
+      {/* Center Content */}
+      <div className="relative z-10 w-full max-w-md px-6 text-center">
+        
+        {/* Animated Logo */}
+        <div className="mb-10 relative inline-block group">
+          <div className="absolute inset-0 bg-blue-500 rounded-3xl blur-2xl opacity-20 group-hover:opacity-40 transition-opacity duration-1000 animate-pulse"></div>
+          <div className="relative w-24 h-24 bg-gradient-to-br from-blue-600 to-purple-600 rounded-3xl flex items-center justify-center shadow-2xl mx-auto transform transition-transform duration-700 hover:scale-105 hover:rotate-3">
+            <svg className="w-12 h-12 text-white drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
         </div>
 
         {/* Title */}
-        <h1 className="text-7xl font-black text-white tracking-tight mb-4 animate-fade-in drop-shadow-2xl">
-          Plan<span className="text-yellow-400">it</span>
+        <h1 className="text-6xl font-black text-white mb-2 tracking-tighter animate-fade-in-up">
+          Plan<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">it</span>
         </h1>
-        
-        {/* Subtitle */}
-        <p className="text-2xl text-gray-300 font-bold tracking-wide mb-8 animate-fade-in-delay">
-          Your perfect day out, planned just for you
+        <p className="text-gray-400 font-medium tracking-wide text-sm mb-12 uppercase opacity-80 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+          Smart Travel Architect
         </p>
 
-        {/* Loading animation */}
-        <div className="flex items-center justify-center space-x-2">
-          <div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce"></div>
-          <div className="w-3 h-3 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-          <div className="w-3 h-3 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+        {/* Progress Bar Container */}
+        <div className="relative w-full h-1 bg-gray-800 rounded-full overflow-hidden mb-4">
+          {/* Moving Bar */}
+          <div 
+            className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 transition-all duration-75 ease-out shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+            style={{ width: `${progress}%` }}
+          ></div>
         </div>
 
-        {/* Features */}
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-2xl mx-auto">
-          {[
-            { icon: '🎯', title: 'Personalized', desc: 'Tailored to your preferences' },
-            { icon: '💰', title: 'Budget-friendly', desc: 'Smart cost optimization' },
-            { icon: '🚀', title: 'Instant', desc: 'Generated in seconds' }
-          ].map((feature, index) => (
-            <div key={index} className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 border border-gray-700 animate-fade-in-up" style={{ animationDelay: `${0.5 + index * 0.1}s` }}>
-              <div className="text-2xl mb-2">{feature.icon}</div>
-              <div className="text-white font-black text-sm">{feature.title}</div>
-              <div className="text-gray-400 text-xs font-medium">{feature.desc}</div>
-            </div>
-          ))}
+        {/* Dynamic Loading Text */}
+        <div className="flex justify-between items-center text-xs font-display tracking-wider">
+          <span className="text-blue-400 min-w-[150px] text-left">
+            {'>'} {steps[loadingStep]}
+          </span>
+          <span className="text-gray-500">
+            {Math.floor(progress)}%
+          </span>
         </div>
+
       </div>
 
-      {/* Bottom text */}
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 text-gray-500 text-sm font-bold">
-        Made with ❤️ for amazing experiences
+      {/* Footer Version */}
+      <div className="absolute bottom-6 text-gray-700 text-xs font-mono">
+        v1.0.2-beta // System Online
       </div>
-
-      <style jsx>{`
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes fade-in-delay {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes fade-in-up {
-          from { opacity: 0; transform: translateY(30px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .animate-fade-in {
-          animation: fade-in 0.8s ease-out;
-        }
-        
-        .animate-fade-in-delay {
-          animation: fade-in-delay 0.8s ease-out 0.3s both;
-        }
-        
-        .animate-fade-in-up {
-          animation: fade-in-up 0.8s ease-out both;
-        }
-      `}</style>
     </div>
   );
 }

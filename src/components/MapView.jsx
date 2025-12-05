@@ -1,167 +1,152 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { GoogleMap, useJsApiLoader, Marker, InfoWindow, Polyline } from '@react-google-maps/api';
+
+const mapStyles = [
+  { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
+];
+
+const containerStyle = { width: '100%', height: '100%', borderRadius: '1rem' };
+const defaultCenter = { lat: 12.9716, lng: 77.5946 }; // Default to Bangalore center
+
+// 🚕 CHARACTER ICON
+const CAR_ICON = {
+  url: "https://cdn-icons-png.flaticon.com/512/3097/3097180.png", // Pixel Taxi Art
+  scaledSize: { width: 40, height: 40 } // Size of the car
+};
 
 export default function MapView({ itinerary }) {
-  const [selectedDay, setSelectedDay] = useState(1);
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: process.env.REACT_APP_GOOGLE_API_KEY || ""
+  });
 
-  if (!itinerary || !itinerary.itinerary || itinerary.itinerary.length === 0) {
-    return (
-      <div className="bg-gray-900 rounded-2xl shadow-2xl p-8 border border-gray-800">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 4m0 13V4m-6 3l6-3" />
-            </svg>
-          </div>
-          <h3 className="text-xl font-black text-white mb-2">Interactive Map</h3>
-          <p className="text-gray-400 font-medium">Your itinerary locations will appear here</p>
-        </div>
-      </div>
-    );
-  }
+  const [map, setMap] = useState(null);
+  const [selectedPlace, setSelectedPlace] = useState(null);
+  const [routePath, setRoutePath] = useState([]);
+  const [carPosition, setCarPosition] = useState(null);
+  const animationRef = useRef(null);
+  const progressRef = useRef(0);
 
-  const days = itinerary.itinerary.map(day => day.day);
-  const selectedDayData = itinerary.itinerary.find(day => day.day === selectedDay);
+  const markers = useMemo(() => {
+    if (!itinerary?.itinerary) return [];
+    return itinerary.itinerary.map((place, i) => ({
+      id: i,
+      name: place.name, // Real name from backend
+      position: place.location,
+      type: place.type,
+      travelTime: place.travelTime,
+      travelCost: place.travelCost
+    })).filter(m => m.position && m.position.lat);
+  }, [itinerary]);
+
+  useEffect(() => {
+    if (markers.length > 1) {
+      const path = markers.map(m => m.position);
+      setRoutePath(path);
+      setCarPosition(path[0]);
+      progressRef.current = 0;
+    }
+  }, [markers]);
+
+  // SMOOTH ANIMATION
+  useEffect(() => {
+    if (!routePath.length || routePath.length < 2) return;
+    const animate = () => {
+      progressRef.current += 0.005; // Speed adjustment
+      if (progressRef.current >= routePath.length - 1) progressRef.current = 0;
+      
+      const currentIdx = Math.floor(progressRef.current);
+      const nextIdx = (currentIdx + 1) % routePath.length;
+      const ratio = progressRef.current - currentIdx;
+      
+      const p1 = routePath[currentIdx];
+      const p2 = routePath[nextIdx];
+      
+      const lat = p1.lat + (p2.lat - p1.lat) * ratio;
+      const lng = p1.lng + (p2.lng - p1.lng) * ratio;
+      
+      setCarPosition({ lat, lng });
+      animationRef.current = requestAnimationFrame(animate);
+    };
+    animationRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationRef.current);
+  }, [routePath]);
+
+  const onLoad = useCallback((map) => {
+    setMap(map);
+    if (markers.length > 0) {
+      const bounds = new window.google.maps.LatLngBounds();
+      markers.forEach(marker => bounds.extend(marker.position));
+      map.fitBounds(bounds);
+    }
+  }, [markers]);
+
+  if (loadError) return <div className="text-red-500 text-center p-10">Map Error: {loadError.message}</div>;
+  if (!isLoaded) return <div className="glass-card h-96 flex items-center justify-center text-blue-300 animate-pulse">LOADING SATELLITE FEED...</div>;
 
   return (
-    <div className="bg-gray-900 rounded-2xl shadow-2xl border border-gray-800 overflow-hidden">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-2xl font-black mb-2">Interactive Map</h3>
-            <p className="text-blue-100 font-medium">View your itinerary locations and routes</p>
-          </div>
-          <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 4m0 13V4m-6 3l6-3" />
-            </svg>
-          </div>
+    <div className="glass-card rounded-3xl overflow-hidden animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+      <div className="p-6 border-b border-white/10 bg-white/5 flex justify-between items-center">
+        <div>
+          <h3 className="text-2xl font-black font-display text-white mb-1">Live Tracking</h3>
+          <p className="text-gray-400 text-sm">Visualizing route sequence</p>
         </div>
       </div>
 
-      {/* Day Selector */}
-      <div className="p-4 border-b border-gray-700">
-        <div className="flex space-x-2 overflow-x-auto">
-          {days.map(day => (
-            <button
-              key={day}
-              onClick={() => setSelectedDay(day)}
-              className={`px-4 py-2 rounded-lg font-black whitespace-nowrap transition-all duration-200 ${
-                selectedDay === day
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
-              }`}
-            >
-              Day {day}
-            </button>
+      <div className="h-[500px] w-full relative">
+        <GoogleMap
+          mapContainerStyle={containerStyle}
+          center={defaultCenter}
+          zoom={12}
+          onLoad={onLoad}
+          options={{ styles: mapStyles, disableDefaultUI: false }}
+        >
+          {/* 1. Route Line */}
+          <Polyline path={routePath} options={{ strokeColor: "#3b82f6", strokeOpacity: 0.6, strokeWeight: 6, geodesic: true }} />
+
+          {/* 2. Destination Pins (With Names) */}
+          {markers.map((marker, i) => (
+            <Marker
+              key={marker.id}
+              position={marker.position}
+              onClick={() => setSelectedPlace(marker)}
+              label={{ 
+                text: marker.name, // SHOWS NAME ON MAP
+                color: "white", 
+                className: "bg-black/50 px-2 py-1 rounded text-xs font-bold mt-10" // Custom styling for label
+              }} 
+            />
           ))}
-        </div>
-      </div>
 
-      {/* Map Container */}
-      <div className="p-6">
-        <div className="bg-gray-800 rounded-xl p-8 border-2 border-dashed border-gray-600 relative overflow-hidden">
-          {/* Map Placeholder */}
-          <div className="text-center mb-6">
-            <div className="w-20 h-20 bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-10 h-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </div>
-            <h4 className="text-lg font-black text-white mb-2">Map Integration Coming Soon</h4>
-            <p className="text-gray-400 font-medium mb-4">Interactive map with real-time location data</p>
-          </div>
+          {/* 3. The Moving Character/Car */}
+          {carPosition && (
+            <Marker
+              position={carPosition}
+              icon={CAR_ICON} // Uses the taxi image
+              zIndex={1000}
+            />
+          )}
 
-          {/* Location Pins */}
-          <div className="relative">
-            {selectedDayData?.activities.map((activity, index) => (
-              <div key={index} className="absolute transform -translate-x-1/2 -translate-y-1/2">
-                <div 
-                  className="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform"
-                  style={{
-                    left: `${20 + (index * 15)}%`,
-                    top: `${30 + (index * 10)}%`
-                  }}
-                  title={activity.name}
-                ></div>
-                <div 
-                  className="absolute top-6 left-1/2 transform -translate-x-1/2 bg-gray-900 rounded-lg shadow-lg p-2 text-xs whitespace-nowrap opacity-0 hover:opacity-100 transition-opacity border border-gray-700"
-                  style={{
-                    left: `${20 + (index * 15)}%`,
-                    top: `${30 + (index * 10)}%`
-                  }}
-                >
-                  <span className="text-white font-medium">{activity.name}</span>
+          {/* 4. Info Window */}
+          {selectedPlace && (
+            <InfoWindow position={selectedPlace.position} onCloseClick={() => setSelectedPlace(null)}>
+              <div className="text-black p-2 min-w-[150px]">
+                <h4 className="font-bold text-lg mb-1 font-display">{selectedPlace.name}</h4>
+                <div className="text-xs text-gray-600 space-y-1">
+                    <p>🚕 Travel: {selectedPlace.travelTime || 'Calculating...'}</p>
+                    <p>💵 Cost: ₹{selectedPlace.travelCost || 0}</p>
                 </div>
               </div>
-            ))}
-          </div>
-
-          {/* Route Lines */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none">
-            {selectedDayData?.activities.slice(0, -1).map((_, index) => (
-              <line
-                key={index}
-                x1={`${20 + (index * 15)}%`}
-                y1={`${30 + (index * 10)}%`}
-                x2={`${20 + ((index + 1) * 15)}%`}
-                y2={`${30 + ((index + 1) * 10)}%`}
-                stroke="#3B82F6"
-                strokeWidth="2"
-                strokeDasharray="5,5"
-                opacity="0.6"
-              />
-            ))}
-          </svg>
-        </div>
-
-        {/* Location List */}
-        <div className="mt-6">
-          <h5 className="text-lg font-black text-white mb-4">Day {selectedDay} Locations</h5>
-          <div className="space-y-3">
-            {selectedDayData?.activities.map((activity, index) => (
-              <div key={index} className="flex items-center p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700">
-                <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-black mr-3">
-                  {index + 1}
-                </div>
-                <div className="flex-1">
-                  <div className="font-black text-white">{activity.name}</div>
-                  <div className="text-sm text-gray-400 font-medium">{activity.time}</div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button className="p-2 text-gray-400 hover:text-blue-400 transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
-                  <button className="p-2 text-gray-400 hover:text-blue-400 transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Map Features */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            { icon: '📍', title: 'Location Pins', desc: 'See all your stops' },
-            { icon: '🛣️', title: 'Route Planning', desc: 'Optimized travel paths' },
-            { icon: '⏰', title: 'Timing Info', desc: 'Real-time schedules' }
-          ].map((feature, index) => (
-            <div key={index} className="text-center p-4 bg-gray-800 rounded-lg border border-gray-700">
-              <div className="text-2xl mb-2">{feature.icon}</div>
-              <div className="font-black text-white text-sm">{feature.title}</div>
-              <div className="text-gray-400 text-xs font-medium">{feature.desc}</div>
-            </div>
-          ))}
-        </div>
+            </InfoWindow>
+          )}
+        </GoogleMap>
       </div>
     </div>
   );
-} 
+}
