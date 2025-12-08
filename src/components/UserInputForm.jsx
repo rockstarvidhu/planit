@@ -78,7 +78,7 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
     };
 
     try {
-      const response = await fetch('http://localhost:5000/api/itinerary', {
+      const response = await fetch('https://planit-backend-1fga.onrender.com/api/itinerary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData),
