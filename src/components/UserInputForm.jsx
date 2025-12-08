@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 
 const defaultPrefs = {
+  nature: true,
+  adventure: true,
+  fun: true,
   food: true,
-  entertainment: true,
-  activities: true,
 };
 
 export default function UserInputForm({ onItineraryGenerated, onSubmit, onError }) {
@@ -13,81 +14,58 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
   const [preferences, setPreferences] = useState(defaultPrefs);
   const [numberOfPeople, setNumberOfPeople] = useState(2);
   const [privateVehicleOwned, setPrivateVehicleOwned] = useState(false);
+  const [mileage, setMileage] = useState(15);
+  
   const [currentStep, setCurrentStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [locating, setLocating] = useState(false);
 
-  const handleChange = (e) => {
-    setPreferences({ ...preferences, [e.target.name]: e.target.checked });
+  const togglePref = (key) => {
+    setPreferences(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // 🛰️ GPS Location Logic
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
-      if (onError) onError("Geolocation is not supported by your browser");
+      if (onError) onError("Geolocation is not supported");
       return;
     }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const coords = `${position.coords.latitude},${position.coords.longitude}`;
-        setLocation(coords);
+        setLocation(`${position.coords.latitude},${position.coords.longitude}`);
         setLocating(false);
       },
-      (error) => {
-        console.error("Location error:", error);
-        if (onError) onError("Unable to retrieve location. Please type it manually.");
+      () => {
+        if (onError) onError("Unable to locate. Type manually.");
         setLocating(false);
       }
     );
   };
 
-  // 🚦 Navigation Logic
-  const nextStep = (e) => {
-    if (e) e.preventDefault(); // Stop form submission if triggered by Enter key
-    if (currentStep < 3 && isStepValid()) {
-      setCurrentStep(curr => curr + 1);
-    }
+  const nextStep = () => {
+    if (currentStep < 3 && isStepValid()) setCurrentStep(curr => curr + 1);
   };
 
   const prevStep = () => {
     if (currentStep > 1) setCurrentStep(curr => curr - 1);
   };
 
-  // 🛡️ Key Press Handler (Prevents accidental submits)
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault(); // Stop default submit
-      if (currentStep < 3) {
-        nextStep(); // Go to next step instead
-      }
-    }
-  };
-
-  // 🚀 Final Submission Logic
-  const handleSubmit = async (e) => {
-    if (e) e.preventDefault();
-    
-    // SAFETY CHECK: If we are not on Step 3, DO NOT submit.
-    if (currentStep !== 3) {
-      return; 
-    }
-    
-    onSubmit(); // Notify App.js loading started
+  const handleSubmit = async () => {
+    onSubmit();
     setSubmitting(true);
 
     const preferenceTypeMap = {
+      nature: 'nature_park',
+      adventure: 'adventure_sports',
+      fun: 'entertainment',
       food: 'restaurant',
-      entertainment: 'movie_theater',
-      activities: 'tourist_attraction', // Updated to find more spots
     };
     
     const filters = Object.entries(preferences)
       .filter(([key, value]) => value)
       .map(([key]) => preferenceTypeMap[key]);
 
-    // Fallback: If no filters selected, pick at least one
-    if (filters.length === 0) filters.push('tourist_attraction');
+    if (filters.length === 0) filters.push('nature_park');
 
     const requestData = {
       budget: parseInt(budget),
@@ -96,6 +74,7 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
       filters,
       people: numberOfPeople,
       hasPrivateVehicle: privateVehicleOwned,
+      mileage: privateVehicleOwned ? parseFloat(mileage) : null,
     };
 
     try {
@@ -106,15 +85,10 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
       });
 
       const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to fetch itinerary');
-      }
-
+      if (!response.ok) throw new Error(result.error || 'Failed');
       onItineraryGenerated(result);
 
     } catch (error) {
-      console.error('Error:', error);
       if (onError) onError(error.message);
     } finally {
       setSubmitting(false);
@@ -130,146 +104,96 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
     }
   };
 
+  const VibeCard = ({ id, label, icon, color, active }) => (
+    <div 
+      onClick={() => togglePref(id)}
+      className={`relative p-4 rounded-2xl border cursor-pointer transition-all duration-300 group overflow-hidden ${
+        active 
+          ? `bg-${color}-500/20 border-${color}-500 shadow-[0_0_20px_rgba(var(--${color}-rgb),0.3)] scale-[1.02]` 
+          : 'bg-gray-900/40 border-gray-700 hover:border-gray-500'
+      }`}
+    >
+      <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 bg-gradient-to-br from-${color}-500 to-transparent transition-opacity`}></div>
+      <div className="flex flex-col items-center text-center">
+        <span className={`text-3xl mb-2 transition-transform group-hover:scale-110 ${active ? 'grayscale-0' : 'grayscale'}`}>{icon}</span>
+        <span className={`font-bold font-display uppercase tracking-wider text-sm ${active ? 'text-white' : 'text-gray-500'}`}>{label}</span>
+      </div>
+      <div className={`absolute top-2 right-2 w-3 h-3 rounded-full ${active ? `bg-${color}-500 shadow-[0_0_10px_currentColor]` : 'bg-gray-800'}`}></div>
+    </div>
+  );
+
   return (
-    <div className="max-w-2xl mx-auto">
-      {/* Progress Bar */}
-      <div className="mb-8 px-4">
-        <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500 ease-out" 
-               style={{ width: `${(currentStep / 3) * 100}%` }}></div>
-        </div>
+    <div className="max-w-2xl mx-auto min-h-[500px] flex flex-col justify-center">
+      <div className="flex justify-center gap-2 mb-8">
+        {[1, 2, 3].map(num => (
+          <div key={num} className={`h-1.5 w-12 rounded-full transition-all duration-500 ${
+            currentStep >= num ? 'bg-blue-500 shadow-[0_0_10px_#3b82f6]' : 'bg-gray-800'
+          }`}></div>
+        ))}
       </div>
 
-      <form className="glass-card p-8 sm:p-10 rounded-3xl animate-fade-in-up">
-        
-        {/* Step 1: Location */}
+      <div className="glass-card p-8 sm:p-10 rounded-3xl border border-white/10 relative overflow-hidden animate-fade-in-up">
         {currentStep === 1 && (
-          <div className="space-y-6">
-            <div className="text-center">
-                <h3 className="text-3xl font-black font-display text-white tracking-tight">Where to?</h3>
+          <div className="space-y-8 text-center animate-fade-in">
+            <div>
+                <h3 className="text-4xl font-black font-display text-white mb-2">Initialize Target</h3>
+                <p className="text-blue-400 font-mono text-xs uppercase tracking-widest">Select Drop Zone</p>
             </div>
-            
-            <div className="relative">
+            <div className="relative group">
                 <input 
-                    type="text" 
-                    value={location} 
-                    onChange={e => setLocation(e.target.value)} 
-                    onKeyDown={handleKeyDown} // Handle Enter Key
-                    placeholder="e.g. Mannuthy, Thrissur" 
-                    className="w-full pl-6 pr-14 py-4 bg-gray-900/50 border border-gray-700 rounded-2xl focus:border-blue-500 text-xl text-white outline-none transition-all"
-                    autoFocus 
+                    type="text" value={location} onChange={e => setLocation(e.target.value)} onKeyDown={e => e.key === 'Enter' && nextStep()} placeholder="ENTER CITY / COORDINATES" 
+                    className="w-full text-center py-6 bg-black/30 border-2 border-gray-700 rounded-2xl focus:border-blue-500 text-2xl font-bold text-white outline-none transition-all placeholder:text-gray-700 placeholder:text-lg focus:shadow-[0_0_30px_rgba(59,130,246,0.2)]" autoFocus 
                 />
-                {/* GPS Button */}
-                <button
-                  type="button"
-                  onClick={handleUseCurrentLocation}
-                  disabled={locating}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition-all disabled:animate-pulse"
-                  title="Use Current Location"
-                >
-                  {locating ? (
-                    <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  ) : (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                  )}
+                <button type="button" onClick={handleUseCurrentLocation} disabled={locating} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 text-gray-500 hover:text-blue-400 transition-colors">
+                  {locating ? <span className="animate-spin block">↻</span> : "⌖"}
                 </button>
             </div>
-
-            <div className="pt-2">
-                <div className="flex justify-between text-xs font-bold text-blue-400 uppercase mb-2">
-                    <span>Search Radius</span>
-                    <span>{(parseInt(radius)/1000).toFixed(1)} km</span>
-                </div>
-                <input 
-                    type="range" 
-                    min="1000" 
-                    max="25000" 
-                    step="1000" 
-                    value={radius} 
-                    onChange={e => setRadius(e.target.value)} 
-                    className="slider w-full" 
-                />
+            <div className="w-full px-4">
+                <div className="flex justify-between text-xs font-mono text-gray-500 mb-2"><span>SCAN RADIUS</span><span className="text-blue-400">{(parseInt(radius)/1000).toFixed(1)} KM</span></div>
+                <input type="range" min="1000" max="25000" step="1000" value={radius} onChange={e => setRadius(e.target.value)} className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-blue-500" />
             </div>
           </div>
         )}
 
-        {/* Step 2: Budget */}
         {currentStep === 2 && (
-          <div className="space-y-6">
-            <h3 className="text-3xl font-black font-display text-white text-center">Your Budget</h3>
-            <div className="relative">
-                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 text-xl">₹</span>
-                <input 
-                    type="number" 
-                    value={budget} 
-                    onChange={e => setBudget(e.target.value)} 
-                    onKeyDown={handleKeyDown} // Handle Enter Key
-                    placeholder="5000" 
-                    className="w-full pl-12 pr-6 py-4 bg-gray-900/50 border border-gray-700 rounded-2xl text-xl text-white focus:border-green-500 outline-none" 
-                    autoFocus 
-                />
+          <div className="space-y-8 text-center animate-fade-in">
+             <div><h3 className="text-4xl font-black font-display text-white mb-2">Allocate Funds</h3><p className="text-green-400 font-mono text-xs uppercase tracking-widest">Set Mission Budget</p></div>
+            <div className="relative inline-block">
+                <span className="absolute top-4 left-6 text-gray-600 text-3xl">₹</span>
+                <input type="number" value={budget} onChange={e => setBudget(e.target.value)} onKeyDown={e => e.key === 'Enter' && nextStep()} placeholder="0" className="w-full text-center py-6 bg-black/30 border-2 border-gray-700 rounded-2xl focus:border-green-500 text-5xl font-black font-display text-green-400 outline-none transition-all placeholder:text-gray-800 focus:shadow-[0_0_30px_rgba(34,197,94,0.2)]" autoFocus />
             </div>
-            <div className="flex justify-center items-center gap-4 bg-gray-900/30 p-4 rounded-2xl border border-gray-800">
-                <button type="button" onClick={() => setNumberOfPeople(Math.max(1, numberOfPeople - 1))} className="w-10 h-10 bg-gray-800 rounded-lg text-white hover:bg-gray-700">-</button>
-                <span className="text-xl font-bold font-display text-white w-24 text-center">{numberOfPeople} People</span>
-                <button type="button" onClick={() => setNumberOfPeople(numberOfPeople + 1)} className="w-10 h-10 bg-gray-800 rounded-lg text-white hover:bg-gray-700">+</button>
+            <div className="flex justify-center items-center gap-6">
+                <button onClick={() => setNumberOfPeople(Math.max(1, numberOfPeople - 1))} className="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-2xl font-bold text-white transition-colors">-</button>
+                <div className="text-center"><span className="block text-2xl font-bold text-white">{numberOfPeople}</span><span className="text-[10px] text-gray-500 uppercase font-mono tracking-widest">AGENTS</span></div>
+                <button onClick={() => setNumberOfPeople(numberOfPeople + 1)} className="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-2xl font-bold text-white transition-colors">+</button>
             </div>
           </div>
         )}
 
-        {/* Step 3: Preferences & Submit */}
         {currentStep === 3 && (
-          <div className="space-y-6">
-            <h3 className="text-3xl font-black font-display text-white text-center">Vibe Check</h3>
-            <div className="space-y-3">
-                {[
-                    { key: 'food', label: 'Food & Cafes', icon: '🍽️' },
-                    { key: 'entertainment', label: 'Movies & Fun', icon: '🎬' },
-                    { key: 'activities', label: 'Adventure & Nature', icon: '🧗' }
-                ].map(({ key, label, icon }) => (
-                    <label key={key} className={`flex items-center p-4 rounded-xl border cursor-pointer transition-all ${preferences[key] ? 'border-blue-500 bg-blue-500/10' : 'border-gray-700 bg-gray-900/30 hover:border-gray-600'}`}>
-                        <input type="checkbox" name={key} checked={preferences[key]} onChange={handleChange} className="mr-4 w-5 h-5 accent-blue-500"/>
-                        <span className="text-2xl mr-3">{icon}</span>
-                        <span className="text-white font-bold">{label}</span>
-                    </label>
-                ))}
+          <div className="space-y-6 animate-fade-in">
+             <div className="text-center"><h3 className="text-3xl font-black font-display text-white mb-1">Select Vibes</h3><p className="text-purple-400 font-mono text-xs uppercase tracking-widest">Filter Objectives</p></div>
+            <div className="grid grid-cols-2 gap-4">
+                <VibeCard id="adventure" label="Adventure" icon="🏎️" color="orange" active={preferences.adventure} />
+                <VibeCard id="fun" label="Arcade/Fun" icon="🎮" color="purple" active={preferences.fun} />
+                <VibeCard id="nature" label="Nature" icon="🌿" color="emerald" active={preferences.nature} />
+                <VibeCard id="food" label="Food" icon="🍔" color="amber" active={preferences.food} />
             </div>
-            
-            <label className={`flex items-center p-4 rounded-xl border cursor-pointer transition-all ${privateVehicleOwned ? 'border-purple-500 bg-purple-500/10' : 'border-gray-700 bg-gray-900/30 hover:border-gray-600'}`}>
-              <input type="checkbox" checked={privateVehicleOwned} onChange={e => setPrivateVehicleOwned(e.target.checked)} className="mr-4 w-5 h-5 accent-purple-500"/>
-              <span className="text-2xl mr-3">🚗</span>
-              <div>
-                  <span className="text-white font-bold block">I have a vehicle</span>
-                  <span className="text-xs text-gray-400">Calculate fuel cost instead of cab</span>
-              </div>
-            </label>
+            <div onClick={() => setPrivateVehicleOwned(!privateVehicleOwned)} className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${privateVehicleOwned ? 'border-blue-500 bg-blue-900/20' : 'border-gray-800 bg-black/20'}`}>
+                <div className="flex items-center gap-3"><span className="text-2xl">🚗</span><div><span className={`block font-bold text-sm ${privateVehicleOwned ? 'text-white' : 'text-gray-500'}`}>PRIVATE VEHICLE</span><span className="text-[10px] text-gray-600 font-mono">CALCULATE FUEL COST</span></div></div>
+                <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_currentColor] ${privateVehicleOwned ? 'bg-green-400 text-green-400' : 'bg-gray-800 text-transparent'}`}></div>
+            </div>
+            {privateVehicleOwned && (
+                 <div className="animate-fade-in-down"><div className="flex justify-between text-xs font-bold text-blue-400 uppercase mb-1 px-1"><span>Vehicle Mileage</span><span>{mileage} KM/L</span></div><input type="range" min="5" max="60" step="1" value={mileage} onChange={e => setMileage(e.target.value)} className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-blue-500" /></div>
+            )}
           </div>
         )}
 
-        {/* Buttons */}
-        <div className="flex justify-between mt-8 pt-6 border-t border-white/10">
-            {currentStep > 1 ? (
-                <button type="button" onClick={prevStep} className="text-gray-400 hover:text-white font-bold px-4">Back</button>
-            ) : <div></div>}
-            
-            <button 
-                // SAFETY: Type is strictly 'button' unless on Step 3
-                type={currentStep === 3 ? 'button' : 'button'} 
-                onClick={currentStep === 3 ? handleSubmit : nextStep}
-                disabled={!isStepValid() || submitting}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-3 rounded-xl font-bold font-display hover:scale-105 transition-transform shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-                {submitting ? (
-                    <>
-                     <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                     Planning...
-                    </>
-                ) : (
-                    currentStep === 3 ? 'Create Plan ✨' : 'Next Step →'
-                )}
-            </button>
+        <div className="flex justify-between mt-10 pt-6 border-t border-white/5">
+            <button type="button" onClick={prevStep} className={`text-sm font-mono text-gray-500 hover:text-white transition-colors ${currentStep === 1 ? 'opacity-0 pointer-events-none' : ''}`}>&lt; ABORT</button>
+            <button type="button" onClick={currentStep === 3 ? handleSubmit : nextStep} disabled={!isStepValid() || submitting} className="bg-white text-black px-8 py-3 rounded-xl font-black font-display uppercase tracking-widest hover:scale-105 hover:shadow-[0_0_20px_rgba(255,255,255,0.4)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">{submitting ? 'PROCESSING...' : (currentStep === 3 ? 'LAUNCH MISSION' : 'CONFIRM >')}</button>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
