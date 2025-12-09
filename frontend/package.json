@@ -3,6 +3,8 @@
     "version": "0.1.0",
     "private": true,
     "dependencies": {
+        "ajv": "^8.17.1",
+        "ajv-keywords": "^3.5.2",
         "autoprefixer": "^10.4.0",
         "axios": "^1.6.0",
         "framer-motion": "^10.16.4",
