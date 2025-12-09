@@ -1,0 +1,105 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  /* 1. Frosted Glass Card */
+  .glass-card {
+    @apply bg-gray-900/60 backdrop-blur-xl border border-white/10 shadow-xl;
+  }
+  
+  /* 2. Neon Text Glow */
+  .text-glow {
+    text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+  }
+
+  /* 3. Button Shine Animation */
+  .btn-shine {
+    @apply relative overflow-hidden;
+  }
+  .btn-shine::after {
+    content: '';
+    @apply absolute top-0 -left-[100%] w-full h-full;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.2),
+      transparent
+    );
+    transition: 0.5s;
+  }
+  .btn-shine:hover::after {
+    @apply left-[100%];
+  }
+}
+
+/* Base Styles */
+body {
+  font-family: 'Inter', sans-serif;
+  @apply bg-black text-gray-100;
+  -webkit-font-smoothing: antialiased;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* 4. Grid Background Pattern */
+.bg-grid-pattern {
+  background-size: 40px 40px;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-gray-900;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-700 rounded-full hover:bg-gray-600 transition-colors;
+}
+
+/* Custom Range Slider */
+.slider {
+  -webkit-appearance: none;
+  @apply bg-transparent cursor-pointer;
+}
+.slider::-webkit-slider-track {
+  @apply bg-gray-700 h-2 rounded-lg;
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  @apply h-5 w-5 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)] transition-transform duration-200;
+  margin-top: -6px; /* Center thumb */
+}
+.slider::-webkit-slider-thumb:hover {
+  @apply scale-125 bg-blue-400;
+}
+.slider::-moz-range-track {
+  @apply bg-gray-700 h-2 rounded-lg;
+}
+.slider::-moz-range-thumb {
+  @apply h-5 w-5 bg-blue-500 rounded-full border-none shadow-[0_0_10px_rgba(59,130,246,0.5)] transition-transform duration-200;
+}
+
+/* Animations */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out forwards;
+}
+
+/* Loading Spinner */
+.loader-spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
