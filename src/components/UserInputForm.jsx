@@ -78,6 +78,7 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
     };
 
     try {
+      // Make sure this matches your live backend URL
       const response = await fetch('https://planit-backend-1fga.onrender.com/api/itinerary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -124,6 +125,7 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
 
   return (
     <div className="max-w-2xl mx-auto min-h-[500px] flex flex-col justify-center">
+      {/* Progress Steps */}
       <div className="flex justify-center gap-2 mb-8">
         {[1, 2, 3].map(num => (
           <div key={num} className={`h-1.5 w-12 rounded-full transition-all duration-500 ${
@@ -133,65 +135,122 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
       </div>
 
       <div className="glass-card p-8 sm:p-10 rounded-3xl border border-white/10 relative overflow-hidden animate-fade-in-up">
+        
+        {/* STEP 1: LOCATION */}
         {currentStep === 1 && (
           <div className="space-y-8 text-center animate-fade-in">
             <div>
-                <h3 className="text-4xl font-black font-display text-white mb-2">Initialize Target</h3>
-                <p className="text-blue-400 font-mono text-xs uppercase tracking-widest">Select Drop Zone</p>
+                <h3 className="text-4xl font-black font-display text-white mb-2">Where to?</h3>
+                <p className="text-blue-400 font-mono text-xs uppercase tracking-widest">Enter Location</p>
             </div>
             <div className="relative group">
                 <input 
-                    type="text" value={location} onChange={e => setLocation(e.target.value)} onKeyDown={e => e.key === 'Enter' && nextStep()} placeholder="ENTER CITY / COORDINATES" 
-                    className="w-full text-center py-6 bg-black/30 border-2 border-gray-700 rounded-2xl focus:border-blue-500 text-2xl font-bold text-white outline-none transition-all placeholder:text-gray-700 placeholder:text-lg focus:shadow-[0_0_30px_rgba(59,130,246,0.2)]" autoFocus 
+                    type="text" 
+                    value={location} 
+                    onChange={e => setLocation(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && nextStep()} 
+                    placeholder="City or Address" 
+                    className="w-full text-center py-6 bg-black/30 border-2 border-gray-700 rounded-2xl focus:border-blue-500 text-2xl font-bold text-white outline-none transition-all placeholder:text-gray-700 placeholder:text-lg focus:shadow-[0_0_30px_rgba(59,130,246,0.2)]" 
+                    autoFocus 
                 />
                 <button type="button" onClick={handleUseCurrentLocation} disabled={locating} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 text-gray-500 hover:text-blue-400 transition-colors">
                   {locating ? <span className="animate-spin block">↻</span> : "⌖"}
                 </button>
             </div>
             <div className="w-full px-4">
-                <div className="flex justify-between text-xs font-mono text-gray-500 mb-2"><span>SCAN RADIUS</span><span className="text-blue-400">{(parseInt(radius)/1000).toFixed(1)} KM</span></div>
+                <div className="flex justify-between text-xs font-mono text-gray-500 mb-2">
+                    <span>Search Range</span>
+                    <span className="text-blue-400">{(parseInt(radius)/1000).toFixed(1)} km</span>
+                </div>
                 <input type="range" min="1000" max="25000" step="1000" value={radius} onChange={e => setRadius(e.target.value)} className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-blue-500" />
             </div>
           </div>
         )}
 
+        {/* STEP 2: BUDGET */}
         {currentStep === 2 && (
           <div className="space-y-8 text-center animate-fade-in">
-             <div><h3 className="text-4xl font-black font-display text-white mb-2">Allocate Funds</h3><p className="text-green-400 font-mono text-xs uppercase tracking-widest">Set Mission Budget</p></div>
+             <div>
+                 <h3 className="text-4xl font-black font-display text-white mb-2">Total Budget</h3>
+                 <p className="text-green-400 font-mono text-xs uppercase tracking-widest">For the whole group</p>
+             </div>
             <div className="relative inline-block">
                 <span className="absolute top-4 left-6 text-gray-600 text-3xl">₹</span>
-                <input type="number" value={budget} onChange={e => setBudget(e.target.value)} onKeyDown={e => e.key === 'Enter' && nextStep()} placeholder="0" className="w-full text-center py-6 bg-black/30 border-2 border-gray-700 rounded-2xl focus:border-green-500 text-5xl font-black font-display text-green-400 outline-none transition-all placeholder:text-gray-800 focus:shadow-[0_0_30px_rgba(34,197,94,0.2)]" autoFocus />
+                <input 
+                    type="number" 
+                    value={budget} 
+                    onChange={e => setBudget(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && nextStep()} 
+                    placeholder="2000" 
+                    className="w-full text-center py-6 bg-black/30 border-2 border-gray-700 rounded-2xl focus:border-green-500 text-5xl font-black font-display text-green-400 outline-none transition-all placeholder:text-gray-800 focus:shadow-[0_0_30px_rgba(34,197,94,0.2)]" 
+                    autoFocus 
+                />
             </div>
             <div className="flex justify-center items-center gap-6">
                 <button onClick={() => setNumberOfPeople(Math.max(1, numberOfPeople - 1))} className="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-2xl font-bold text-white transition-colors">-</button>
-                <div className="text-center"><span className="block text-2xl font-bold text-white">{numberOfPeople}</span><span className="text-[10px] text-gray-500 uppercase font-mono tracking-widest">AGENTS</span></div>
+                <div className="text-center">
+                    <span className="block text-2xl font-bold text-white">{numberOfPeople}</span>
+                    <span className="text-[10px] text-gray-500 uppercase font-mono tracking-widest">People</span>
+                </div>
                 <button onClick={() => setNumberOfPeople(numberOfPeople + 1)} className="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-2xl font-bold text-white transition-colors">+</button>
             </div>
           </div>
         )}
 
+        {/* STEP 3: VIBES */}
         {currentStep === 3 && (
           <div className="space-y-6 animate-fade-in">
-             <div className="text-center"><h3 className="text-3xl font-black font-display text-white mb-1">Select Vibes</h3><p className="text-purple-400 font-mono text-xs uppercase tracking-widest">Filter Objectives</p></div>
+             <div className="text-center">
+                 {/* ✅ RESTORED 'Select Vibes' HERE */}
+                 <h3 className="text-3xl font-black font-display text-white mb-1">Select Vibes</h3>
+                 <p className="text-purple-400 font-mono text-xs uppercase tracking-widest">Pick your preferences</p>
+             </div>
             <div className="grid grid-cols-2 gap-4">
                 <VibeCard id="adventure" label="Adventure" icon="🏎️" color="orange" active={preferences.adventure} />
-                <VibeCard id="fun" label="Arcade/Fun" icon="🎮" color="purple" active={preferences.fun} />
+                <VibeCard id="fun" label="Fun & Games" icon="🎮" color="purple" active={preferences.fun} />
                 <VibeCard id="nature" label="Nature" icon="🌿" color="emerald" active={preferences.nature} />
                 <VibeCard id="food" label="Food" icon="🍔" color="amber" active={preferences.food} />
             </div>
+            
             <div onClick={() => setPrivateVehicleOwned(!privateVehicleOwned)} className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${privateVehicleOwned ? 'border-blue-500 bg-blue-900/20' : 'border-gray-800 bg-black/20'}`}>
-                <div className="flex items-center gap-3"><span className="text-2xl">🚗</span><div><span className={`block font-bold text-sm ${privateVehicleOwned ? 'text-white' : 'text-gray-500'}`}>PRIVATE VEHICLE</span><span className="text-[10px] text-gray-600 font-mono">CALCULATE FUEL COST</span></div></div>
+                <div className="flex items-center gap-3">
+                    <span className="text-2xl">🚗</span>
+                    <div>
+                        <span className={`block font-bold text-sm ${privateVehicleOwned ? 'text-white' : 'text-gray-500'}`}>I have a Vehicle</span>
+                        <span className="text-[10px] text-gray-600 font-mono">Calculate fuel cost</span>
+                    </div>
+                </div>
                 <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_currentColor] ${privateVehicleOwned ? 'bg-green-400 text-green-400' : 'bg-gray-800 text-transparent'}`}></div>
             </div>
+            
             {privateVehicleOwned && (
-                 <div className="animate-fade-in-down"><div className="flex justify-between text-xs font-bold text-blue-400 uppercase mb-1 px-1"><span>Vehicle Mileage</span><span>{mileage} KM/L</span></div><input type="range" min="5" max="60" step="1" value={mileage} onChange={e => setMileage(e.target.value)} className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-blue-500" /></div>
+                 <div className="animate-fade-in-down">
+                     <div className="flex justify-between text-xs font-bold text-blue-400 uppercase mb-1 px-1">
+                         <span>Vehicle Mileage</span>
+                         <span>{mileage} km/l</span>
+                     </div>
+                     <input type="range" min="5" max="60" step="1" value={mileage} onChange={e => setMileage(e.target.value)} className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                 </div>
             )}
           </div>
         )}
 
         <div className="flex justify-between mt-10 pt-6 border-t border-white/5">
-            <button type="button" onClick={prevStep} className={`text-sm font-mono text-gray-500 hover:text-white transition-colors ${currentStep === 1 ? 'opacity-0 pointer-events-none' : ''}`}>&lt; ABORT</button>
-            <button type="button" onClick={currentStep === 3 ? handleSubmit : nextStep} disabled={!isStepValid() || submitting} className="bg-white text-black px-8 py-3 rounded-xl font-black font-display uppercase tracking-widest hover:scale-105 hover:shadow-[0_0_20px_rgba(255,255,255,0.4)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">{submitting ? 'PROCESSING...' : (currentStep === 3 ? 'LAUNCH MISSION' : 'CONFIRM >')}</button>
+            <button 
+                type="button" 
+                onClick={prevStep} 
+                className={`text-sm font-mono text-gray-500 hover:text-white transition-colors ${currentStep === 1 ? 'opacity-0 pointer-events-none' : ''}`}
+            >
+                &lt; BACK
+            </button>
+            <button 
+                type="button" 
+                onClick={currentStep === 3 ? handleSubmit : nextStep} 
+                disabled={!isStepValid() || submitting} 
+                className="bg-white text-black px-8 py-3 rounded-xl font-black font-display uppercase tracking-widest hover:scale-105 hover:shadow-[0_0_20px_rgba(255,255,255,0.4)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+                {submitting ? 'PLANNING...' : (currentStep === 3 ? 'FIND PLANS' : 'NEXT >')}
+            </button>
         </div>
       </div>
     </div>
