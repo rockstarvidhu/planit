@@ -4,13 +4,14 @@ export default function SplashScreen() {
   const [progress, setProgress] = useState(0);
   const [loadingStep, setLoadingStep] = useState(0);
 
+  // Friendly loading steps
   const steps = [
-    "Initializing Planit AI...",
-    "Connecting to Satellite Grid...",
-    "Calibrating Local Maps...",
-    "Fetching Weather Patterns...",
-    "Optimizing Travel Routes...",
-    "Ready to Explore."
+    "Starting PlanIt...",
+    "Connecting to server...",
+    "Loading maps...",
+    "Checking local weather...",
+    "Finding best routes...",
+    "Ready to go!"
   ];
 
   useEffect(() => {
@@ -66,7 +67,7 @@ export default function SplashScreen() {
           Plan<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">it</span>
         </h1>
         <p className="text-gray-400 font-medium tracking-wide text-sm mb-12 uppercase opacity-80 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-          Smart Travel Architect
+          Your AI Travel Planner
         </p>
 
         {/* Progress Bar Container */}
@@ -81,7 +82,7 @@ export default function SplashScreen() {
         {/* Dynamic Loading Text */}
         <div className="flex justify-between items-center text-xs font-display tracking-wider">
           <span className="text-blue-400 min-w-[150px] text-left">
-            {'>'} {steps[loadingStep]}
+            {steps[loadingStep]}
           </span>
           <span className="text-gray-500">
             {Math.floor(progress)}%
@@ -92,7 +93,7 @@ export default function SplashScreen() {
 
       {/* Footer Version */}
       <div className="absolute bottom-6 text-gray-700 text-xs font-mono">
-        v1.0.2-beta // System Online
+        v1.0.3 // Beta
       </div>
     </div>
   );
