@@ -4,16 +4,15 @@ export default function LoadingGame() {
   // Game State
   const [playerPos, setPlayerPos] = useState(50); // % from left
   const [obstacles, setObstacles] = useState([]);
-  const [coins, setCoins] = useState([]); // NEW: Collectibles
-  const [particles, setParticles] = useState([]); // NEW: Visual effects
+  const [coins, setCoins] = useState([]); 
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
-  const [gameSpeed, setGameSpeed] = useState(1.0); // NEW: Speed multiplier
+  const [gameSpeed, setGameSpeed] = useState(1.0); 
   const [gameOver, setGameOver] = useState(false);
-  const [message, setMessage] = useState(null); // "Speed Up!", "+100"
+  const [message, setMessage] = useState(null); 
   
   const requestRef = useRef();
-  const scoreRef = useRef(0); // Ref for instant access inside loop
+  const scoreRef = useRef(0); 
 
   // --- GAME LOOP ---
   const updateGame = useCallback(() => {
@@ -22,9 +21,9 @@ export default function LoadingGame() {
     setScore(s => {
       const newScore = s + 1;
       scoreRef.current = newScore;
-      // Difficulty Ramp: Every 500 points, speed increases by 10%
+      // Difficulty Ramp: Every 500 points, speed increases slightly
       if (newScore > 0 && newScore % 500 === 0) {
-        setGameSpeed(prev => Math.min(prev + 0.1, 2.5)); // Cap at 2.5x
+        setGameSpeed(prev => Math.min(prev + 0.1, 2.5)); 
         showMessage("SPEED UP!", "text-red-400");
       }
       return newScore;
@@ -33,14 +32,15 @@ export default function LoadingGame() {
     // 1. Move Obstacles (Cars)
     setObstacles(prev => {
       const newObstacles = prev
-        .map(obs => ({ ...obs, y: obs.y + (1.2 * gameSpeed) })) 
+        .map(obs => ({ ...obs, y: obs.y + (0.8 * gameSpeed) })) 
         .filter(obs => obs.y < 100);
 
       // Collision Detection (Player vs Car)
-      const crash = newObstacles.some(obs => 
-        obs.y > 80 && obs.y < 95 && 
-        Math.abs(obs.x - playerPos) < 10 // Hitbox width
-      );
+      const crash = newObstacles.some(obs => {
+        const verticalHit = obs.y > 82 && obs.y < 96;
+        const horizontalHit = Math.abs(obs.x - playerPos) < 6; 
+        return verticalHit && horizontalHit;
+      });
 
       if (crash) {
         setGameOver(true);
@@ -54,12 +54,11 @@ export default function LoadingGame() {
     setCoins(prev => {
       let collected = false;
       const newCoins = prev
-        .map(c => ({ ...c, y: c.y + (1.2 * gameSpeed) }))
+        .map(c => ({ ...c, y: c.y + (0.8 * gameSpeed) }))
         .filter(c => {
-          // Check Collection
-          if (!collected && c.y > 80 && c.y < 95 && Math.abs(c.x - playerPos) < 12) {
+          if (!collected && c.y > 82 && c.y < 96 && Math.abs(c.x - playerPos) < 10) {
             collected = true;
-            return false; // Remove from screen
+            return false; 
           }
           return c.y < 100;
         });
@@ -72,12 +71,10 @@ export default function LoadingGame() {
     });
 
     // 3. Spawners
-    // Spawn Obstacle (Car)
-    if (Math.random() < 0.03 * gameSpeed) { 
+    if (Math.random() < 0.015 * gameSpeed) { 
       setObstacles(prev => [...prev, { id: Date.now() + Math.random(), x: Math.random() * 80 + 10, y: -15 }]);
     }
-    // Spawn Coin (Less frequent)
-    if (Math.random() < 0.015) { 
+    if (Math.random() < 0.01) { 
       setCoins(prev => [...prev, { id: Date.now() + Math.random(), x: Math.random() * 80 + 10, y: -15 }]);
     }
 
@@ -93,7 +90,7 @@ export default function LoadingGame() {
   }, [updateGame]);
 
   // --- CONTROLS ---
-  const moveLeft = () => setPlayerPos(p => Math.max(10, p - 6)); // Smoother movement
+  const moveLeft = () => setPlayerPos(p => Math.max(10, p - 6)); 
   const moveRight = () => setPlayerPos(p => Math.min(90, p + 6));
 
   useEffect(() => {
@@ -106,13 +103,11 @@ export default function LoadingGame() {
     return () => window.removeEventListener('keydown', handleKey);
   }, [gameOver]);
 
-  // Helper for popup text
   const showMessage = (text, color) => {
     setMessage({ text, color, id: Date.now() });
     setTimeout(() => setMessage(null), 800);
   };
 
-  // Reset Game
   const restartGame = () => {
     setGameOver(false);
     setObstacles([]);
@@ -142,7 +137,7 @@ export default function LoadingGame() {
         </div>
       )}
 
-      {/* HUD (Heads Up Display) */}
+      {/* HUD */}
       <div className="absolute top-3 left-4 z-20 flex flex-col items-start pointer-events-none">
         <span className="text-white font-black font-mono text-xl shadow-black drop-shadow-md">
             {Math.floor(score)}
@@ -152,14 +147,14 @@ export default function LoadingGame() {
         </span>
       </div>
 
-      {/* Popup Messages (+100, Speed Up) */}
+      {/* Popup Messages */}
       {message && (
         <div className={`absolute top-1/4 left-1/2 -translate-x-1/2 z-20 text-2xl font-black italic animate-bounce ${message.color}`} key={message.id}>
           {message.text}
         </div>
       )}
 
-      {/* Moving Road Effect */}
+      {/* Moving Road */}
       <div className="absolute inset-0 flex justify-center opacity-30">
          <div className="w-full h-full bg-[linear-gradient(to_bottom,transparent_50%,#333_50%)] bg-[length:100%_40px] animate-road-scroll"></div>
       </div>
@@ -167,9 +162,7 @@ export default function LoadingGame() {
          <div className="w-1 h-full border-l-2 border-dashed border-gray-600 opacity-60"></div>
       </div>
 
-      {/* --- ENTITIES --- */}
-      
-      {/* 1. COINS */}
+      {/* COINS */}
       {coins.map(coin => (
         <div 
             key={coin.id}
@@ -180,24 +173,33 @@ export default function LoadingGame() {
         </div>
       ))}
 
-      {/* 2. PLAYER CAR */}
+      {/* --- PLAYER CAR (RED SPORTS STYLE) --- */}
       <div 
         className="absolute bottom-4 w-10 h-16 transition-all duration-75 ease-linear z-20"
         style={{ left: `${playerPos}%`, transform: 'translateX(-50%)' }}
       >
-        {/* Car Body */}
-        <div className="w-full h-full bg-blue-600 rounded-xl shadow-[0_10px_20px_rgba(37,99,235,0.4)] relative overflow-hidden border border-blue-400">
-            {/* Windshield */}
-            <div className="absolute top-3 left-1 right-1 h-3 bg-sky-300/80 rounded-sm"></div>
-            {/* Stripes */}
-            <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-2 bg-black/20"></div>
-            {/* Brake Lights */}
-            <div className="absolute bottom-1 left-1 w-2 h-1 bg-red-500 shadow-[0_0_5px_red]"></div>
-            <div className="absolute bottom-1 right-1 w-2 h-1 bg-red-500 shadow-[0_0_5px_red]"></div>
+        {/* Body - Red Gradient & Sleek Shape */}
+        <div className="w-full h-full bg-gradient-to-b from-red-500 to-red-700 rounded-xl shadow-[0_10px_25px_rgba(220,38,38,0.5)] relative overflow-hidden border-2 border-red-900">
+            {/* Racing Stripe */}
+            <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-2 bg-white/20"></div>
+
+            {/* Windshield (Darker, sleeker) */}
+            <div className="absolute top-4 left-1 right-1 h-3 bg-gray-900/80 rounded-sm border-t border-gray-700"></div>
+
+            {/* Engine Vents (Black hint at back) */}
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-6 h-2 bg-black/30 flex justify-evenly items-center rounded-sm opacity-50">
+                <div className="w-1 h-full bg-black/50"></div>
+                <div className="w-1 h-full bg-black/50"></div>
+            </div>
+
+            {/* Tail Lights (Round & Bright Red) */}
+            <div className="absolute bottom-1 left-1 w-2 h-2 bg-red-500 shadow-[0_0_8px_red] rounded-full border border-red-950"></div>
+            <div className="absolute bottom-1 right-1 w-2 h-2 bg-red-500 shadow-[0_0_8px_red] rounded-full border border-red-950"></div>
         </div>
       </div>
+      {/* ------------------------------------ */}
 
-      {/* 3. ENEMY CARS */}
+      {/* ENEMY CARS */}
       {obstacles.map(obs => (
         <div 
           key={obs.id}
@@ -212,7 +214,7 @@ export default function LoadingGame() {
         </div>
       ))}
 
-      {/* Touch Controls Overlay */}
+      {/* Controls Overlay */}
       <div className="absolute inset-0 z-0 flex">
         <div className="w-1/2 h-full active:bg-white/5 transition-colors" onClick={moveLeft}></div>
         <div className="w-1/2 h-full active:bg-white/5 transition-colors" onClick={moveRight}></div>
