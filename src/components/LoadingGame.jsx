@@ -25,7 +25,7 @@ export default function LoadingGame() {
       const newScore = s + 1;
       scoreRef.current = newScore;
       if (newScore > 0 && newScore % 500 === 0) {
-        setGameSpeed(prev => Math.min(prev + 0.1, 2.2)); // Cap speed lower for playability
+        setGameSpeed(prev => Math.min(prev + 0.1, 2.2)); 
         showMessage("SPEED UP!", "text-red-400");
       }
       return newScore;
@@ -34,13 +34,11 @@ export default function LoadingGame() {
     // 1. Move Obstacles
     setObstacles(prev => {
       const newObstacles = prev
-        .map(obs => ({ ...obs, y: obs.y + (0.7 * gameSpeed) })) // Slightly slower base speed for patterns
+        .map(obs => ({ ...obs, y: obs.y + (0.7 * gameSpeed) })) 
         .filter(obs => obs.y < 100);
 
       const crash = newObstacles.some(obs => {
-        // Tighter vertical hitbox
         const verticalHit = obs.y > 80 && obs.y < 94;
-        // Check horizontal overlap (Lane width approx 20%)
         const horizontalHit = Math.abs(obs.x - playerPos) < 12; 
         return verticalHit && horizontalHit;
       });
@@ -74,12 +72,11 @@ export default function LoadingGame() {
     });
 
     // 3. SPAWN LOGIC (WAVES)
-    // Spawn roughly every 60-80 frames depending on speed
     if (Math.random() < 0.012 * gameSpeed) { 
       spawnPattern();
     }
     
-    // Spawn Coin (Rare)
+    // Spawn Coin
     if (Math.random() < 0.005) { 
         const lane = LANES[Math.floor(Math.random() * LANES.length)];
         setCoins(prev => [...prev, { id: Date.now(), x: lane, y: -20 }]);
@@ -90,14 +87,11 @@ export default function LoadingGame() {
     requestRef.current = requestAnimationFrame(updateGame);
   }, [gameOver, playerPos, gameSpeed, highScore]);
 
-  // Helper: Spawn Formations
   const spawnPattern = () => {
      const rand = Math.random();
      const id = Date.now();
-
-     // Pattern 1: The Double Block (Forces you to the open lane)
      if (rand < 0.4) {
-        const safeLaneIndex = Math.floor(Math.random() * 3); // 0, 1, or 2
+        const safeLaneIndex = Math.floor(Math.random() * 3); 
         const newObs = [];
         LANES.forEach((laneX, index) => {
             if (index !== safeLaneIndex) {
@@ -106,7 +100,6 @@ export default function LoadingGame() {
         });
         setObstacles(prev => [...prev, ...newObs]);
      } 
-     // Pattern 2: Single Car (Easy)
      else {
         const lane = LANES[Math.floor(Math.random() * LANES.length)];
         setObstacles(prev => [...prev, { id: id, x: lane, y: -20 }]);
@@ -119,7 +112,6 @@ export default function LoadingGame() {
   }, [updateGame]);
 
   // --- CONTROLS ---
-  // Smoother steering
   const moveLeft = () => setPlayerPos(p => Math.max(15, p - 5)); 
   const moveRight = () => setPlayerPos(p => Math.min(85, p + 5));
 
@@ -150,15 +142,20 @@ export default function LoadingGame() {
   return (
     <div className="w-full h-64 relative overflow-hidden rounded-2xl border-4 border-gray-800 shadow-2xl select-none bg-green-800">
       
-      {/* Game Over UI */}
+      {/* Game Over UI - UPDATED Z-INDEX TO 60 */}
       {gameOver && (
-        <div className="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center animate-fade-in backdrop-blur-sm">
+        <div className="absolute inset-0 z-[60] bg-black/80 flex flex-col items-center justify-center animate-fade-in backdrop-blur-sm">
           <h3 className="text-red-500 font-black text-4xl font-display mb-1 tracking-wider">CRASHED!</h3>
           <div className="text-white font-mono text-sm mb-6 flex flex-col items-center">
             <span>SCORE: {Math.floor(score)}</span>
             <span className="text-yellow-500 text-xs mt-1">BEST: {Math.floor(highScore > score ? highScore : score)}</span>
           </div>
-          <button onClick={restartGame} className="bg-white text-black px-6 py-2 rounded-full font-bold text-xs uppercase hover:scale-110 hover:bg-blue-400 transition-all shadow-lg">Play Again</button>
+          <button 
+            onClick={restartGame} 
+            className="bg-white text-black px-6 py-2 rounded-full font-bold text-xs uppercase hover:scale-110 hover:bg-blue-400 transition-all shadow-lg cursor-pointer active:scale-95"
+          >
+            Play Again
+          </button>
         </div>
       )}
 
@@ -176,25 +173,18 @@ export default function LoadingGame() {
       {/* --- ROAD CONTAINER --- */}
       <div className="absolute inset-y-0 left-8 right-8 bg-[#333] overflow-hidden border-l-4 border-r-4 border-white/20">
           
-          {/* Rumble Strips (Red/White Curbs) */}
           <div className="absolute left-0 w-2 h-full bg-[repeating-linear-gradient(180deg,red,red_20px,white_20px,white_40px)] opacity-80"></div>
           <div className="absolute right-0 w-2 h-full bg-[repeating-linear-gradient(180deg,red,red_20px,white_20px,white_40px)] opacity-80"></div>
-
-          {/* Lane Markers */}
           <div className="absolute left-1/3 w-1 h-full border-r-2 border-dashed border-white/30"></div>
           <div className="absolute right-1/3 w-1 h-full border-l-2 border-dashed border-white/30"></div>
-
-          {/* Moving Road Texture */}
           <div className="absolute inset-0 opacity-20 animate-road-scroll bg-[url('https://www.transparenttextures.com/patterns/asphalt-dark.png')]"></div>
 
-          {/* COINS */}
           {coins.map(coin => (
             <div key={coin.id} className="absolute w-6 h-6 rounded-full bg-yellow-400 shadow-[0_0_15px_#facc15] flex items-center justify-center border-2 border-yellow-200 z-10 animate-spin-slow" style={{ left: `${coin.x}%`, top: `${coin.y}%`, transform: 'translateX(-50%)' }}>
                 <span className="text-[10px] font-bold text-yellow-800">$</span>
             </div>
           ))}
 
-          {/* PLAYER CAR (FERRARI) */}
           <div className="absolute bottom-4 w-10 h-16 transition-all duration-75 ease-linear z-20" style={{ left: `${playerPos}%`, transform: 'translateX(-50%)' }}>
             <div className="w-full h-full bg-gradient-to-b from-red-600 to-red-800 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.5)] relative overflow-hidden border border-red-900">
                 <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-2 bg-white/20"></div>
@@ -207,7 +197,6 @@ export default function LoadingGame() {
             </div>
           </div>
 
-          {/* ENEMY CARS (TRAFFIC) */}
           {obstacles.map(obs => (
             <div key={obs.id} className="absolute w-10 h-16 z-30" style={{ left: `${obs.x}%`, top: `${obs.y}%`, transform: 'translateX(-50%)' }}>
                 <div className="w-full h-full bg-slate-800 rounded-xl shadow-xl border border-slate-900 relative">
@@ -220,11 +209,13 @@ export default function LoadingGame() {
           ))}
       </div>
 
-      {/* Controls Overlay */}
-      <div className="absolute inset-0 z-50 flex">
-        <div className="w-1/2 h-full active:bg-white/5 transition-colors" onClick={moveLeft}></div>
-        <div className="w-1/2 h-full active:bg-white/5 transition-colors" onClick={moveRight}></div>
-      </div>
+      {/* Controls Overlay - ONLY RENDER IF NOT GAME OVER */}
+      {!gameOver && (
+        <div className="absolute inset-0 z-50 flex">
+            <div className="w-1/2 h-full active:bg-white/5 transition-colors" onClick={moveLeft}></div>
+            <div className="w-1/2 h-full active:bg-white/5 transition-colors" onClick={moveRight}></div>
+        </div>
+      )}
 
       <style jsx>{`
         @keyframes road-scroll {
