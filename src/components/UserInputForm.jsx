@@ -182,6 +182,13 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
             <div className="space-y-8 text-center animate-fade-in mt-6">
                 <div>
                     <h3 className="text-4xl font-black font-display text-white mb-2">Where to?</h3>
+                    {/* --- DEBUG BUTTON FOR TESTING GAME --- */}
+                    <button 
+                       onClick={() => setSubmitting(true)}
+                       className="text-[10px] bg-red-500/20 text-red-400 px-2 py-1 rounded border border-red-500/50 hover:bg-red-500 hover:text-white transition-colors mb-2"
+                    >
+                       [DEBUG: TEST GAME]
+                    </button>
                     <p className="text-blue-400 font-mono text-xs uppercase tracking-widest">Enter Location</p>
                 </div>
                 
