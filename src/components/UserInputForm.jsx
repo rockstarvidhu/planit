@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 
 const defaultPrefs = {
-  nature: true,
-  adventure: true,
-  fun: true,
-  food: true,
+  nature: false,
+  adventure: false,
+  fun: false,
+  food: false,
 };
 
 export default function UserInputForm({ onItineraryGenerated, onSubmit, onError }) {
@@ -201,7 +201,6 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
         {currentStep === 3 && (
           <div className="space-y-6 animate-fade-in">
              <div className="text-center">
-                 {/* ✅ RESTORED 'Select Vibes' HERE */}
                  <h3 className="text-3xl font-black font-display text-white mb-1">Select Vibes</h3>
                  <p className="text-purple-400 font-mono text-xs uppercase tracking-widest">Pick your preferences</p>
              </div>
@@ -212,6 +211,7 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
                 <VibeCard id="food" label="Food" icon="🍔" color="amber" active={preferences.food} />
             </div>
             
+            {/* Vehicle Toggle */}
             <div onClick={() => setPrivateVehicleOwned(!privateVehicleOwned)} className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${privateVehicleOwned ? 'border-blue-500 bg-blue-900/20' : 'border-gray-800 bg-black/20'}`}>
                 <div className="flex items-center gap-3">
                     <span className="text-2xl">🚗</span>
@@ -235,6 +235,7 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
           </div>
         )}
 
+        {/* Navigation Buttons */}
         <div className="flex justify-between mt-10 pt-6 border-t border-white/5">
             <button 
                 type="button" 
