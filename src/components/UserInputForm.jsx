@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 
+// Default vibes are OFF
 const defaultPrefs = {
   nature: false,
   adventure: false,
@@ -30,13 +31,35 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
       return;
     }
     setLocating(true);
+    
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocation(`${position.coords.latitude},${position.coords.longitude}`);
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+
+        // UX FIX: Convert numbers to a readable address (Reverse Geocoding)
+        try {
+            const apiKey = process.env.REACT_APP_GOOGLE_API_KEY;
+            if (apiKey) {
+                const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`);
+                const data = await response.json();
+                
+                if (data.results && data.results[0]) {
+                    // Shows "Whitefield, Bangalore, Karnataka" instead of numbers
+                    setLocation(data.results[0].formatted_address); 
+                } else {
+                    setLocation(`${lat},${lng}`); // Fallback if Google fails
+                }
+            } else {
+                setLocation(`${lat},${lng}`); // Fallback if no key
+            }
+        } catch (error) {
+            setLocation(`${lat},${lng}`); // Fallback on network error
+        }
         setLocating(false);
       },
       () => {
-        if (onError) onError("Unable to locate. Type manually.");
+        if (onError) onError("Unable to locate. Please type your city.");
         setLocating(false);
       }
     );
@@ -78,7 +101,6 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
     };
 
     try {
-      // Make sure this matches your live backend URL
       const response = await fetch('https://planit-backend-1fga.onrender.com/api/itinerary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -143,6 +165,7 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
                 <h3 className="text-4xl font-black font-display text-white mb-2">Where to?</h3>
                 <p className="text-blue-400 font-mono text-xs uppercase tracking-widest">Enter Location</p>
             </div>
+            
             <div className="relative group">
                 <input 
                     type="text" 
@@ -150,14 +173,36 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
                     onChange={e => setLocation(e.target.value)} 
                     onKeyDown={e => e.key === 'Enter' && nextStep()} 
                     placeholder="City or Address" 
-                    className="w-full text-center py-6 bg-black/30 border-2 border-gray-700 rounded-2xl focus:border-blue-500 text-2xl font-bold text-white outline-none transition-all placeholder:text-gray-700 placeholder:text-lg focus:shadow-[0_0_30px_rgba(59,130,246,0.2)]" 
+                    className="w-full text-center py-6 bg-black/30 border-2 border-gray-700 rounded-2xl focus:border-blue-500 text-2xl font-bold text-white outline-none transition-all placeholder:text-gray-700 placeholder:text-lg focus:shadow-[0_0_30px_rgba(59,130,246,0.2)] pr-32" 
                     autoFocus 
                 />
-                <button type="button" onClick={handleUseCurrentLocation} disabled={locating} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 text-gray-500 hover:text-blue-400 transition-colors">
-                  {locating ? <span className="animate-spin block">↻</span> : "⌖"}
+                
+                {/* HIGH VISIBILITY BUTTON */}
+                <button 
+                    type="button" 
+                    onClick={handleUseCurrentLocation} 
+                    disabled={locating} 
+                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-gray-800 hover:bg-blue-600 text-gray-300 hover:text-white border border-gray-600 hover:border-blue-500 px-4 py-2 rounded-xl transition-all duration-300 flex items-center gap-2 shadow-lg z-10"
+                >
+                  {locating ? (
+                    <>
+                        <span className="animate-spin">↻</span>
+                        <span className="text-xs font-bold uppercase tracking-wider">Locating...</span>
+                    </>
+                  ) : (
+                    <>
+                        <span>📍</span>
+                        <span className="text-xs font-bold uppercase tracking-wider">Locate Me</span>
+                    </>
+                  )}
                 </button>
             </div>
-            <div className="w-full px-4">
+            
+            <div className="text-xs text-gray-500 font-mono -mt-4">
+                Tip: Tap 'Locate Me' to use your current position
+            </div>
+
+            <div className="w-full px-4 pt-4 border-t border-white/5">
                 <div className="flex justify-between text-xs font-mono text-gray-500 mb-2">
                     <span>Search Range</span>
                     <span className="text-blue-400">{(parseInt(radius)/1000).toFixed(1)} km</span>
@@ -211,7 +256,6 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
                 <VibeCard id="food" label="Food" icon="🍔" color="amber" active={preferences.food} />
             </div>
             
-            {/* Vehicle Toggle */}
             <div onClick={() => setPrivateVehicleOwned(!privateVehicleOwned)} className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${privateVehicleOwned ? 'border-blue-500 bg-blue-900/20' : 'border-gray-800 bg-black/20'}`}>
                 <div className="flex items-center gap-3">
                     <span className="text-2xl">🚗</span>
@@ -235,7 +279,6 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
           </div>
         )}
 
-        {/* Navigation Buttons */}
         <div className="flex justify-between mt-10 pt-6 border-t border-white/5">
             <button 
                 type="button" 
