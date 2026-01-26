@@ -1,28 +1,27 @@
 import React, { useState, useEffect } from 'react';
 
+// MOVED OUTSIDE THE COMPONENT (Fixes dependency error)
+const steps = [
+  "Starting PlanIt...",
+  "Connecting to server...",
+  "Loading maps...",
+  "Checking local weather...",
+  "Finding best routes...",
+  "Ready to go!"
+];
+
 export default function SplashScreen() {
   const [progress, setProgress] = useState(0);
   const [loadingStep, setLoadingStep] = useState(0);
 
-  // Friendly loading steps
-  const steps = [
-    "Starting PlanIt...",
-    "Connecting to server...",
-    "Loading maps...",
-    "Checking local weather...",
-    "Finding best routes...",
-    "Ready to go!"
-  ];
-
   useEffect(() => {
-    // Progress Bar Animation (0% to 100% over ~4 seconds)
+    // Progress Bar Animation
     const interval = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 100) {
           clearInterval(interval);
           return 100;
         }
-        // Randomize speed slightly for realism
         return prev + Math.random() * 2;
       });
     }, 50);
@@ -41,15 +40,14 @@ export default function SplashScreen() {
     } else {
       setLoadingStep(steps.length - 1);
     }
+    // Added 'progress' to dependency array (Vercel likes this too)
   }, [progress]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-black bg-grid-pattern relative overflow-hidden font-sans">
       
-      {/* Background Spotlight */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black/0 to-black pointer-events-none"></div>
 
-      {/* Center Content */}
       <div className="relative z-10 w-full max-w-md px-6 text-center">
         
         {/* Animated Logo */}
@@ -72,7 +70,6 @@ export default function SplashScreen() {
 
         {/* Progress Bar Container */}
         <div className="relative w-full h-1 bg-gray-800 rounded-full overflow-hidden mb-4">
-          {/* Moving Bar */}
           <div 
             className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 transition-all duration-75 ease-out shadow-[0_0_10px_rgba(59,130,246,0.5)]"
             style={{ width: `${progress}%` }}
@@ -91,7 +88,6 @@ export default function SplashScreen() {
 
       </div>
 
-      {/* Footer Version */}
       <div className="absolute bottom-6 text-gray-700 text-xs font-mono">
         v1.0.3 // Beta
       </div>
