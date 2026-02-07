@@ -12,11 +12,11 @@ app.use(express.json());
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-app.get('/', (req, res) => res.send('✅ PlanIt Server: Strict Mode Enabled'));
+app.get('/', (req, res) => res.send('✅ PlanIt Server: Smart Pricing Enabled'));
 
 // --- HELPER 1: Strict Distance Calculation ---
 function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Earth radius in km
+  const R = 6371; 
   const dLat = (lat2 - lat1) * (Math.PI/180);
   const dLon = (lon2 - lon1) * (Math.PI/180);
   const a = 
@@ -48,28 +48,41 @@ function extractJSON(text) {
     }
 }
 
-// --- HELPER 4: Smart Activity Details ---
-function getSmartDetails(placeData) {
-    const name = placeData.name.toLowerCase();
-    const types = placeData.types || [];
-    let activities = ["Standard Entry (~₹200)"];
+// --- HELPER 4: SMART CATEGORY RULES (The Fix) ---
+function getCategoryRules(types, name) {
+    const t = types || [];
+    const n = name.toLowerCase();
 
-    if (types.includes('amusement_park') || name.includes('wonderla')) activities = ["Entry Ticket (~₹1000)", "Fast Track (~₹1500)"];
-    else if (name.includes('kart') || name.includes('arena')) activities = ["Go-Karting (~₹400)", "Paintball (~₹350)"];
-    else if (types.includes('movie_theater')) activities = ["Movie Ticket (~₹250)", "Popcorn (~₹300)"];
-    else if (types.includes('restaurant') || types.includes('food')) activities = ["Main Course (~₹350)", "Beverages (~₹150)"];
-    else if (types.includes('park')) activities = ["Entry Fee (~₹50)", "Boating (~₹150)"];
+    // 1. Shopping Malls -> Variable/Free
+    if (t.includes('shopping_mall')) {
+        return { type: 'shopping', defaultCost: 0, note: "Free Entry (Variable Shopping)" };
+    }
+    
+    // 2. Restaurants -> Fixed ₹200 (User Request)
+    if (t.includes('restaurant') || t.includes('food') || t.includes('cafe') || t.includes('bakery') || t.includes('meal_takeaway')) {
+        return { type: 'food', defaultCost: 200, note: "Standard Meal Estimate" };
+    }
 
-    return { activities };
+    // 3. Activities -> Specific Estimates if reviews fail
+    if (n.includes('kart') || n.includes('racing')) return { type: 'activity', defaultCost: 600, note: "Est. Race Fee" };
+    if (t.includes('bowling_alley')) return { type: 'activity', defaultCost: 450, note: "Est. Game Fee" };
+    if (t.includes('movie_theater')) return { type: 'activity', defaultCost: 300, note: "Est. Ticket Price" };
+    if (t.includes('amusement_park') || n.includes('wonderla')) return { type: 'ticket', defaultCost: 1200, note: "Est. Entry Ticket" };
+    if (t.includes('zoo') || t.includes('aquarium')) return { type: 'ticket', defaultCost: 400, note: "Est. Entry Ticket" };
+    
+    // 4. Nature/Parks -> Cheap Entry
+    if (t.includes('park') || t.includes('tourist_attraction')) return { type: 'nature', defaultCost: 50, note: "Est. Entry Fee" };
+
+    // Default
+    return { type: 'general', defaultCost: 100, note: "Estimated Cost" };
 }
 
-// --- HELPER 5: ADVANCED PRICE PARSER (The Fix for Accuracy) ---
+// --- HELPER 5: PRICE PARSER FROM REVIEWS ---
 function extractPriceMode(reviews) {
     if (!reviews || reviews.length === 0) return null;
 
     const pricesFound = [];
-    // Regex catches: "Rs. 500", "INR 500", "500/-", "500 rupees", "cost is 500"
-    const priceRegex = /(?:rs\.?|₹|inr|cost|price)\s*[:\-\s]?\s*(\d+(?:,\d+)*)|(\d+)\s*(?:\/-|rs|rupees)/gi;
+    const priceRegex = /(?:rs\.?|₹|inr|cost|price|entry)\s*[:\-\s]?\s*(\d+(?:,\d+)*)|(\d+)\s*(?:\/-|rs|rupees)/gi;
 
     reviews.forEach(r => {
         const text = r.text || "";
@@ -77,8 +90,8 @@ function extractPriceMode(reviews) {
         while ((match = priceRegex.exec(text)) !== null) {
             const rawNum = (match[1] || match[2]).replace(/,/g, '');
             const price = parseInt(rawNum);
-            // Strict filter: Reject years (2020-2030) and phone-number-like values
-            if (price > 10 && price < 15000 && (price < 2020 || price > 2030)) {
+            // Strict filter: Reject years and phone numbers
+            if (price > 20 && price < 10000 && (price < 2020 || price > 2030)) {
                 pricesFound.push(price);
             }
         }
@@ -86,13 +99,11 @@ function extractPriceMode(reviews) {
 
     if (pricesFound.length === 0) return null;
 
-    // Find MODE (Most Common Price Bucket)
     const buckets = {};
     let maxCount = 0;
     let bestBucket = null;
 
     pricesFound.forEach(p => {
-        // Round to nearest 50 to group similar prices (480 -> 500, 520 -> 500)
         const bucket = Math.round(p / 50) * 50; 
         buckets[bucket] = (buckets[bucket] || 0) + 1;
         if (buckets[bucket] > maxCount) {
@@ -107,7 +118,7 @@ function extractPriceMode(reviews) {
 // --- HELPER 6: Fetch Details ---
 async function fetchPlaceDetails(placeId) {
     try {
-        const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=editorial_summary,reviews,name,geometry&key=${process.env.GOOGLE_API_KEY}`;
+        const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=editorial_summary,reviews,name,geometry,types&key=${process.env.GOOGLE_API_KEY}`;
         const response = await axios.get(url);
         return response.data.result; 
     } catch (e) {
@@ -119,10 +130,9 @@ async function fetchPlaceDetails(placeId) {
 // 🚀 MAIN API ROUTE
 // ==========================================
 app.post('/api/itinerary', async (req, res) => {
-  console.log("\n🌍 NEW REQUEST:", req.body.filters);
+  console.log("\n🌍 NEW REQUEST:", req.body);
   let { budget, people = 2, location, radius = 5000, filters = [], hasPrivateVehicle, mileage = 15 } = req.body;
   
-  // Ensure strict number types
   const radiusKm = parseFloat(radius) / 1000;
   const userBudget = parseFloat(budget);
 
@@ -140,7 +150,7 @@ app.post('/api/itinerary', async (req, res) => {
 
     // --- 2. AI BRAINSTORMING ---
     const prompt = `Recommend 8 distinct outings near ${startLat}, ${startLng} matching keywords: ${searchQueries.join(", ")}. Return JSON: [{ "name": "Place Name", "description": "Short summary" }]`;
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3.0-pro-preview" });
     
     let placeList = [];
     try {
@@ -159,17 +169,17 @@ app.post('/api/itinerary', async (req, res) => {
         placeList = [...placeList, ...gRes.flat()];
     }
 
-    // --- 4. PRE-FILTERING (Distance & Initial Cost) ---
+    // --- 4. PRE-FILTERING ---
     let candidates = [];
     const PETROL_PRICE = 108; 
     let processedNames = new Set();
 
     for (const placeItem of placeList) {
-        if (candidates.length >= 8) break;
+        if (candidates.length >= 10) break;
         const normName = placeItem.name.toLowerCase().trim();
         if (processedNames.has(normName)) continue;
 
-        // Fetch Data
+        // Fetch Basic Data
         const placeUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(placeItem.name)}&location=${startLat},${startLng}&radius=${radius}&key=${process.env.GOOGLE_API_KEY}`;
         const placeResp = await axios.get(placeUrl);
         const placeData = placeResp.data.results[0];
@@ -177,46 +187,34 @@ app.post('/api/itinerary', async (req, res) => {
         if (!placeData) continue;
         processedNames.add(normName);
 
-        // A. STRICT RADIUS CHECK
+        // Strict Radius Check
         const pLat = placeData.geometry.location.lat;
         const pLng = placeData.geometry.location.lng;
         const exactDist = calculateDistance(startLat, startLng, pLat, pLng);
         
-        // 🛑 HARD STOP: If distance is even 0.1km over radius, drop it.
-        if (exactDist > radiusKm) {
-            console.log(`❌ Dropped ${placeItem.name}: ${exactDist.toFixed(1)}km is > ${radiusKm}km`);
-            continue; 
-        }
+        if (exactDist > radiusKm) continue; 
 
         // Travel Cost
-        const distKm = exactDist * 1.3; // Estimate road distance as 30% more than straight line
+        const distKm = exactDist * 1.3; 
         let travelCost = hasPrivateVehicle 
             ? Math.round((distKm / parseFloat(mileage)) * PETROL_PRICE)
             : Math.round(50 + (distKm * 22));
 
-        // Initial Price Estimate
-        let level = placeData.price_level || 1;
-        const priceMap = [0, 200, 600, 1500, 2500];
-        let estimatedActivityCost = priceMap[level] * people;
-
         candidates.push({
             ...placeItem,
             place_id: placeData.place_id,
-            formatted_address: placeData.formatted_address,
             location: placeData.geometry.location,
             rating: placeData.rating,
             photo_ref: placeData.photos?.[0]?.photo_reference,
             travelCost,
-            travelTime: `${Math.round(distKm * 2)} mins`, // Rough estimate
+            travelTime: `${Math.round(distKm * 2)} mins`,
             distanceStr: `${exactDist.toFixed(1)} km`,
-            estimatedActivityCost,
             types: placeData.types
         });
     }
 
-    // --- 5. REAL PRICE CHECK & FINAL BUDGET FILTER ---
+    // --- 5. SMART PRICING LOGIC ---
     console.log(" 📝 Verifying prices...");
-    
     const finalItinerary = [];
 
     await Promise.all(candidates.map(async (item) => {
@@ -226,43 +224,71 @@ app.post('/api/itinerary', async (req, res) => {
         if (details?.editorial_summary?.overview) finalDesc = details.editorial_summary.overview;
         else if (details?.reviews?.[0]?.text) finalDesc = details.reviews[0].text.substring(0, 150) + "...";
 
-        // 🔍 EXTRACT REAL PRICE
-        let verifiedActivityCost = item.estimatedActivityCost;
-        let costNote = "Estimated";
+        // --- 🟢 APPLYING USER RULES HERE ---
+        const category = getCategoryRules(item.types, item.name);
+        let verifiedActivityCost = 0;
+        let costNote = "";
 
-        if (details?.reviews) {
-            const modePrice = extractPriceMode(details.reviews);
-            if (modePrice) {
-                verifiedActivityCost = modePrice * people;
-                costNote = `Verified from Reviews (~₹${modePrice}/person)`;
-                console.log(`   💰 Found REAL price for ${item.name}: ₹${modePrice}`);
+        // Rule 1: Food -> Fixed
+        if (category.type === 'food') {
+            verifiedActivityCost = category.defaultCost * people;
+            costNote = `Est. Meal (~₹${category.defaultCost}/p)`;
+        } 
+        // Rule 2: Shopping -> Free
+        else if (category.type === 'shopping') {
+            verifiedActivityCost = 0;
+            costNote = "Free Entry (Shopping Variable)";
+        }
+        // Rule 3: Activities -> Try Reviews, then Smart Fallback
+        else {
+            let foundReviewPrice = false;
+            if (details?.reviews) {
+                const modePrice = extractPriceMode(details.reviews);
+                if (modePrice) {
+                    verifiedActivityCost = modePrice * people;
+                    costNote = `Verified: ₹${modePrice}/p`;
+                    foundReviewPrice = true;
+                }
+            }
+            
+            if (!foundReviewPrice) {
+                verifiedActivityCost = category.defaultCost * people;
+                costNote = category.note;
             }
         }
 
         const totalTripCost = verifiedActivityCost + item.travelCost;
+        const maxBudget = userBudget * 1.20; // 20% Buffer
 
-        // 🛑 FINAL STRICT BUDGET CHECK
-        // We only add it to the final list if the REAL price fits the budget
-        if (totalTripCost <= userBudget) {
-            const smartData = getSmartDetails({ name: item.name, types: item.types });
+        if (totalTripCost <= maxBudget) {
+            // Generate Activity Tags based on category
+            let acts = [];
+            if (category.type === 'food') acts = ["Dining", "Cafe"];
+            else if (category.type === 'shopping') acts = ["Shopping", "Window Shopping"];
+            else if (category.type === 'activity') acts = ["Game", "Fun"];
+            else acts = ["Sightseeing"];
+
             finalItinerary.push({
                 ...item,
                 description: finalDesc,
                 totalOptionCost: totalTripCost,
                 activityCost: verifiedActivityCost,
                 costNote: costNote,
-                activities: smartData.activities
+                activities: acts
             });
-        } else {
-            console.log(`❌ Dropped ${item.name}: Total ₹${totalTripCost} > Budget ₹${userBudget}`);
         }
     }));
+
+    // Sort by price (Cheapest first)
+    finalItinerary.sort((a, b) => a.totalOptionCost - b.totalOptionCost);
 
     res.json({ 
         itinerary: finalItinerary, 
         totalCost: finalItinerary.length > 0 ? finalItinerary[0].totalOptionCost : 0, 
         budget: userBudget,
-        aiSummary: finalItinerary.length > 0 ? "Optimized Plan" : "No places found matching strictly within budget/radius."
+        aiSummary: finalItinerary.length > 0 
+            ? "Here are the best spots matching your budget!" 
+            : "No places found. Try increasing your budget or radius."
     });
 
   } catch (error) {
