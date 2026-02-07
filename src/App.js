@@ -3,7 +3,7 @@ import UserInputForm from './components/UserInputForm';
 import ItineraryDisplay from './components/ItineraryDisplay';
 import MapView from './components/MapView';
 import SplashScreen from './components/SplashScreen';
-import LoadingGame from './components/LoadingGame'; // <--- 1. Import the Game
+import LoadingGame from './components/LoadingGame'; // ✅ 1. Import the Game
 
 function App() {
   const [itinerary, setItinerary] = useState(null);
@@ -12,6 +12,7 @@ function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [currentStep, setCurrentStep] = useState('input'); 
 
+  // Splash Screen Timer
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 5000); 
     return () => clearTimeout(timer);
@@ -19,31 +20,71 @@ function App() {
 
   if (showSplash) return <SplashScreen />;
 
-  // FIX: Accept the FULL data object (including aiSummary)
+  // --- HANDLERS ---
+
+  // Called when Backend successfully returns data
   const handleItineraryGenerated = (fullData) => {
     setItinerary(fullData); 
-    setLoading(false);
+    setLoading(false); // Stop loading (hides game)
     setError(null);
     setCurrentStep('result');
   };
 
+  // Called when Backend fails
   const handleError = (msg) => {
     setLoading(false);
     setError(msg);
   };
 
+  // Reset to initial state
   const handleStartOver = () => {
     setItinerary(null);
     setError(null);
     setCurrentStep('input');
   };
 
+  // Called when user clicks "Find My Plan"
   const handleFormSubmit = () => {
-    setLoading(true);
+    setLoading(true); // ✅ Starts the Loading Game
     setError(null);
-    setCurrentStep('loading'); // Ensure step is set to loading
+    setCurrentStep('loading');
   };
 
+  // --- 🛑 IMMERSIVE LOADING GAME SCREEN ---
+  // This takes over the WHOLE screen when loading is true
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center relative overflow-hidden font-sans">
+        {/* Background Effect */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black/0 to-black pointer-events-none" />
+        
+        <div className="z-10 w-full max-w-2xl px-6 flex flex-col items-center">
+            {/* Loading Text */}
+            <h2 className="text-4xl font-black font-display text-white mb-2 text-center text-glow animate-pulse tracking-wide">
+                BUILDING YOUR PLAN...
+            </h2>
+            <p className="text-blue-300 text-center mb-8 font-mono text-sm max-w-md">
+                AI is strictly verifying prices & checking radius limits. Play while you wait!
+            </p>
+            
+            {/* THE GAME COMPONENT */}
+            <div className="w-full shadow-2xl shadow-blue-900/50 rounded-2xl overflow-hidden border border-blue-500/30">
+                <LoadingGame />
+            </div>
+
+            {/* Cancel Button */}
+            <button 
+                onClick={() => setLoading(false)}
+                className="mt-8 text-slate-500 hover:text-white text-xs uppercase tracking-widest underline transition-colors"
+            >
+                Cancel Generation
+            </button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- 🚀 MAIN APP UI (Rendered when NOT loading) ---
   return (
     <div className="min-h-screen bg-black bg-grid-pattern font-sans relative overflow-x-hidden selection:bg-blue-500/30">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black/0 to-black pointer-events-none fixed" />
@@ -75,8 +116,8 @@ function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-10">
         
-        {/* Step Indicator - Hide during loading game to minimize clutter */}
-        {currentStep !== 'result' && !loading && (
+        {/* Step Indicator (Hidden if on result) */}
+        {currentStep !== 'result' && (
           <div className="mb-12">
             <div className="flex items-center justify-center space-x-6">
               {[
@@ -102,25 +143,6 @@ function App() {
           </div>
         )}
 
-        {/* --- 2. LOADING GAME SECTION --- */}
-        {loading && (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in-up">
-            <div className="w-full max-w-2xl mb-8">
-               {/* This is where the game appears */}
-               <LoadingGame />
-            </div>
-            
-            <div className="text-center">
-              <h3 className="text-3xl font-black font-display text-white mb-3 text-glow">
-                Crafting your perfect trip...
-              </h3>
-              <p className="text-blue-300/80 font-medium text-lg">
-                We are analyzing thousands of reviews while you play!
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* Error Display */}
         {error && (
           <div className="glass-card border-red-500/30 bg-red-900/20 p-6 mb-8 rounded-2xl flex items-start space-x-4 animate-fade-in-up">
@@ -142,8 +164,8 @@ function App() {
           </div>
         )}
 
-        {/* Input Form */}
-        {!loading && currentStep !== 'result' && (
+        {/* 1. Input Form Step */}
+        {currentStep === 'input' && (
           <UserInputForm 
             onItineraryGenerated={handleItineraryGenerated}
             onSubmit={handleFormSubmit}
@@ -151,7 +173,7 @@ function App() {
           />
         )}
 
-        {/* Results */}
+        {/* 2. Results Step */}
         {currentStep === 'result' && itinerary && (
           <div className="space-y-12 animate-fade-in-up">
             <div className="text-center mb-10">
@@ -159,11 +181,17 @@ function App() {
                 Your Itinerary is Ready
               </h2>
               <p className="text-xl text-gray-400 font-medium max-w-2xl mx-auto">
-                We've organized the perfect plan within your budget.
+                {itinerary.aiSummary || "We've organized the perfect plan within your budget."}
               </p>
+              <div className="mt-4 inline-block bg-green-900/30 border border-green-500/30 px-4 py-1 rounded-full">
+                 <span className="text-green-400 font-bold text-sm">
+                    💰 Total Cost: ₹{itinerary.totalCost} / Budget: ₹{itinerary.budget}
+                 </span>
+              </div>
             </div>
-            <ItineraryDisplay itinerary={itinerary} />
-            <MapView itinerary={itinerary} />
+            
+            <ItineraryDisplay itinerary={itinerary.itinerary} />
+            <MapView itinerary={itinerary.itinerary} />
           </div>
         )}
       </main>
