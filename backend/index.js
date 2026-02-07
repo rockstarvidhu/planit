@@ -12,7 +12,7 @@ app.use(express.json());
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-app.get('/', (req, res) => res.send('✅ PlanIt Server: Fail-Safe Mode'));
+app.get('/', (req, res) => res.send('✅ PlanIt Server: Fail-Safe Mode (v2)'));
 
 // --- HELPER 1: Distance Calculation ---
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -108,17 +108,21 @@ app.post('/api/itinerary', async (req, res) => {
         lng = loc.lng;
     }
 
-    // 2. Build Search Queries (Broaden them to ensure results)
+    // 2. Build Search Queries
     let searchQueries = ["tourist attraction", "point of interest"];
     if (filters.includes("adventure_sports")) searchQueries.push("adventure sports");
     if (filters.includes("entertainment")) searchQueries.push("entertainment center");
     if (filters.includes("nature_park")) searchQueries.push("park nature");
     if (filters.includes("restaurant")) searchQueries.push("restaurant");
 
-    // 3. Search Google Maps (No Radius Limit in API call to ensure we get data)
+    // 3. AI Helper (Uses standard Flash model)
+    // We use this just to log what AI thinks, but rely on Google Maps for data to ensure accuracy
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // <--- CHANGED HERE
+
+    // 4. Search Google Maps (Broad Search)
     let allResults = [];
     const promises = searchQueries.map(async (q) => {
-        // We REMOVE radius from the API call to let Google find best matches, then we filter manually
+        // We remove radius from API call to get MORE results, then filter manually
         const gUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}&location=${lat},${lng}&key=${process.env.GOOGLE_API_KEY}`;
         const resp = await axios.get(gUrl);
         return resp.data.results || [];
@@ -136,7 +140,7 @@ app.post('/api/itinerary', async (req, res) => {
         }
     });
 
-    // 4. Sort Candidates by Distance
+    // 5. Sort Candidates by Distance
     candidates = candidates.map(place => {
         const pLat = place.geometry.location.lat;
         const pLng = place.geometry.location.lng;
@@ -144,20 +148,20 @@ app.post('/api/itinerary', async (req, res) => {
         return { ...place, distKm: dist };
     }).sort((a, b) => a.distKm - b.distKm);
 
-    // 5. Apply "Soft" Radius Filter
-    // If we have items inside radius, use them. If not, use the closest ones (Fail-Safe).
+    // 6. Apply "Fail-Safe" Radius Filter
+    // Try to find items inside radius. If none, grab the closest 8 regardless of radius.
     let validCandidates = candidates.filter(c => c.distKm <= radiusKm);
     
     let isFallback = false;
     if (validCandidates.length === 0) {
         console.log("⚠️ No results in radius. Using closest fallback options.");
-        validCandidates = candidates.slice(0, 8); // Take top 8 closest
+        validCandidates = candidates.slice(0, 8); // Fallback: Top 8 closest
         isFallback = true;
     } else {
-        validCandidates = validCandidates.slice(0, 10); // Take top 10 valid
+        validCandidates = validCandidates.slice(0, 10); // Standard: Top 10 valid
     }
 
-    // 6. Process Details & Costs
+    // 7. Process Details & Costs
     const finalItinerary = [];
     console.log(` 📝 Processing ${validCandidates.length} places...`);
 
