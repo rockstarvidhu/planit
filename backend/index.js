@@ -12,7 +12,7 @@ app.use(express.json());
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-app.get('/', (req, res) => res.send('✅ PlanIt Server: Smart Pricing Enabled'));
+app.get('/', (req, res) => res.send('✅ PlanIt Server: Permissive Mode (No Budget Limit)'));
 
 // --- HELPER 1: Strict Distance Calculation ---
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -48,7 +48,7 @@ function extractJSON(text) {
     }
 }
 
-// --- HELPER 4: SMART CATEGORY RULES (The Fix) ---
+// --- HELPER 4: SMART CATEGORY RULES ---
 function getCategoryRules(types, name) {
     const t = types || [];
     const n = name.toLowerCase();
@@ -258,25 +258,23 @@ app.post('/api/itinerary', async (req, res) => {
         }
 
         const totalTripCost = verifiedActivityCost + item.travelCost;
-        const maxBudget = userBudget * 1.20; // 20% Buffer
+        
+        // --- 🟢 NO BUDGET FILTER (All results included) ---
+        // Generate Activity Tags based on category
+        let acts = [];
+        if (category.type === 'food') acts = ["Dining", "Cafe"];
+        else if (category.type === 'shopping') acts = ["Shopping", "Window Shopping"];
+        else if (category.type === 'activity') acts = ["Game", "Fun"];
+        else acts = ["Sightseeing"];
 
-        if (totalTripCost <= maxBudget) {
-            // Generate Activity Tags based on category
-            let acts = [];
-            if (category.type === 'food') acts = ["Dining", "Cafe"];
-            else if (category.type === 'shopping') acts = ["Shopping", "Window Shopping"];
-            else if (category.type === 'activity') acts = ["Game", "Fun"];
-            else acts = ["Sightseeing"];
-
-            finalItinerary.push({
-                ...item,
-                description: finalDesc,
-                totalOptionCost: totalTripCost,
-                activityCost: verifiedActivityCost,
-                costNote: costNote,
-                activities: acts
-            });
-        }
+        finalItinerary.push({
+            ...item,
+            description: finalDesc,
+            totalOptionCost: totalTripCost,
+            activityCost: verifiedActivityCost,
+            costNote: costNote,
+            activities: acts
+        });
     }));
 
     // Sort by price (Cheapest first)
@@ -287,8 +285,8 @@ app.post('/api/itinerary', async (req, res) => {
         totalCost: finalItinerary.length > 0 ? finalItinerary[0].totalOptionCost : 0, 
         budget: userBudget,
         aiSummary: finalItinerary.length > 0 
-            ? "Here are the best spots matching your budget!" 
-            : "No places found. Try increasing your budget or radius."
+            ? "Here are the best spots found near you!" 
+            : "No places found. Try increasing your radius."
     });
 
   } catch (error) {
