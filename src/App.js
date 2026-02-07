@@ -3,6 +3,7 @@ import UserInputForm from './components/UserInputForm';
 import ItineraryDisplay from './components/ItineraryDisplay';
 import MapView from './components/MapView';
 import SplashScreen from './components/SplashScreen';
+import LoadingGame from './components/LoadingGame'; // <--- 1. Import the Game
 
 function App() {
   const [itinerary, setItinerary] = useState(null);
@@ -40,6 +41,7 @@ function App() {
   const handleFormSubmit = () => {
     setLoading(true);
     setError(null);
+    setCurrentStep('loading'); // Ensure step is set to loading
   };
 
   return (
@@ -73,8 +75,8 @@ function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-10">
         
-        {/* Step Indicator */}
-        {currentStep !== 'result' && (
+        {/* Step Indicator - Hide during loading game to minimize clutter */}
+        {currentStep !== 'result' && !loading && (
           <div className="mb-12">
             <div className="flex items-center justify-center space-x-6">
               {[
@@ -100,19 +102,21 @@ function App() {
           </div>
         )}
 
-        {/* Loading Screen */}
+        {/* --- 2. LOADING GAME SECTION --- */}
         {loading && (
-          <div className="text-center py-20 animate-fade-in-up">
-            <div className="inline-flex flex-col items-center">
-              <div className="relative w-20 h-20 mb-6">
-                <div className="absolute inset-0 border-4 border-blue-500/30 rounded-full"></div>
-                <div className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full loader-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-2xl">✨</span>
-                </div>
-              </div>
-              <h3 className="text-2xl font-black font-display text-white mb-2 text-glow">Crafting your perfect trip...</h3>
-              <p className="text-blue-300/80 font-medium">Consulting AI & Analyzing Routes</p>
+          <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in-up">
+            <div className="w-full max-w-2xl mb-8">
+               {/* This is where the game appears */}
+               <LoadingGame />
+            </div>
+            
+            <div className="text-center">
+              <h3 className="text-3xl font-black font-display text-white mb-3 text-glow">
+                Crafting your perfect trip...
+              </h3>
+              <p className="text-blue-300/80 font-medium text-lg">
+                We are analyzing thousands of reviews while you play!
+              </p>
             </div>
           </div>
         )}

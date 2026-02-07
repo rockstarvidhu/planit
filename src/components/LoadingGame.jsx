@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
+// --- CONSTANTS (Moved outside to fix dependency issues) ---
+const LANES = [20, 50, 80];
+
 export default function LoadingGame() {
   // Game State
   const [playerPos, setPlayerPos] = useState(50); // % from left
@@ -14,9 +17,6 @@ export default function LoadingGame() {
   const requestRef = useRef();
   const scoreRef = useRef(0); 
 
-  // LANE CONFIGURATION (Left, Center, Right)
-  const LANES = [20, 50, 80]; 
-
   // --- GAME LOOP ---
   const updateGame = useCallback(() => {
     if (gameOver) return;
@@ -26,7 +26,8 @@ export default function LoadingGame() {
       scoreRef.current = newScore;
       if (newScore > 0 && newScore % 500 === 0) {
         setGameSpeed(prev => Math.min(prev + 0.1, 2.2)); 
-        showMessage("SPEED UP!", "text-red-400");
+        setMessage({ text: "SPEED UP!", color: "text-red-400", id: Date.now() });
+        setTimeout(() => setMessage(null), 800);
       }
       return newScore;
     });
@@ -66,14 +67,31 @@ export default function LoadingGame() {
 
       if (collected) {
         setScore(s => s + 100);
-        showMessage("+100", "text-yellow-400");
+        setMessage({ text: "+100", color: "text-yellow-400", id: Date.now() });
+        setTimeout(() => setMessage(null), 800);
       }
       return newCoins;
     });
 
     // 3. SPAWN LOGIC (WAVES)
     if (Math.random() < 0.012 * gameSpeed) { 
-      spawnPattern();
+        // Inline Spawn Logic to avoid dependency issues
+        const rand = Math.random();
+        const id = Date.now();
+        if (rand < 0.4) {
+            const safeLaneIndex = Math.floor(Math.random() * 3); 
+            const newObs = [];
+            LANES.forEach((laneX, index) => {
+                if (index !== safeLaneIndex) {
+                    newObs.push({ id: id + index, x: laneX, y: -20 });
+                }
+            });
+            setObstacles(prev => [...prev, ...newObs]);
+        } 
+        else {
+            const lane = LANES[Math.floor(Math.random() * LANES.length)];
+            setObstacles(prev => [...prev, { id: id, x: lane, y: -20 }]);
+        }
     }
     
     // Spawn Coin
@@ -85,26 +103,7 @@ export default function LoadingGame() {
     if (Math.random() < 0.05) setMessage(null);
 
     requestRef.current = requestAnimationFrame(updateGame);
-  }, [gameOver, playerPos, gameSpeed, highScore]);
-
-  const spawnPattern = () => {
-     const rand = Math.random();
-     const id = Date.now();
-     if (rand < 0.4) {
-        const safeLaneIndex = Math.floor(Math.random() * 3); 
-        const newObs = [];
-        LANES.forEach((laneX, index) => {
-            if (index !== safeLaneIndex) {
-                newObs.push({ id: id + index, x: laneX, y: -20 });
-            }
-        });
-        setObstacles(prev => [...prev, ...newObs]);
-     } 
-     else {
-        const lane = LANES[Math.floor(Math.random() * LANES.length)];
-        setObstacles(prev => [...prev, { id: id, x: lane, y: -20 }]);
-     }
-  };
+  }, [gameOver, playerPos, gameSpeed, highScore]); // Dependencies are now clean
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(updateGame);
@@ -125,11 +124,6 @@ export default function LoadingGame() {
     return () => window.removeEventListener('keydown', handleKey);
   }, [gameOver]);
 
-  const showMessage = (text, color) => {
-    setMessage({ text, color, id: Date.now() });
-    setTimeout(() => setMessage(null), 800);
-  };
-
   const restartGame = () => {
     setGameOver(false);
     setObstacles([]);
@@ -142,7 +136,7 @@ export default function LoadingGame() {
   return (
     <div className="w-full h-64 relative overflow-hidden rounded-2xl border-4 border-gray-800 shadow-2xl select-none bg-green-800">
       
-      {/* Game Over UI - UPDATED Z-INDEX TO 60 */}
+      {/* Game Over UI */}
       {gameOver && (
         <div className="absolute inset-0 z-[60] bg-black/80 flex flex-col items-center justify-center animate-fade-in backdrop-blur-sm">
           <h3 className="text-red-500 font-black text-4xl font-display mb-1 tracking-wider">CRASHED!</h3>
