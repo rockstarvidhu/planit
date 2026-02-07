@@ -10,13 +10,14 @@ const PORT = 5000;
 app.use(cors());
 app.use(express.json());
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// RENAMED: 'genAI' -> 'aiBrain' (Easier to understand)
+const aiBrain = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-app.get('/', (req, res) => res.send('✅ PlanIt Server v15.0 (Live Cost Analysis Build)'));
+app.get('/', (req, res) => res.send('✅ PlanIt Server (Readable Version)'));
 
-// --- HELPER 1: Haversine Distance ---
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; 
+// --- HELPER 1: Calculate Distance ---
+function getDistanceFromLatLon(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth radius in km
   const dLat = (lat2 - lat1) * (Math.PI/180);
   const dLon = (lon2 - lon1) * (Math.PI/180);
   const a = 
@@ -26,20 +27,22 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * c; 
 }
 
-// --- HELPER 2: Geocoding ---
-async function resolveLocation(location) {
-  if (/^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?),\s*[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)$/.test(location)) return location;
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${process.env.GOOGLE_API_KEY}`;
+// --- HELPER 2: Find Coordinates ---
+async function findCoordinates(locationName) {
+  if (/^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?),\s*[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)$/.test(locationName)) return locationName;
+  
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(locationName)}&key=${process.env.GOOGLE_API_KEY}`;
   const response = await axios.get(url);
+  
   if (response.data.status === 'OK' && response.data.results.length > 0) {
     const { lat, lng } = response.data.results[0].geometry.location;
     return `${lat},${lng}`;
   }
-  throw new Error('City not found');
+  throw new Error('Could not find that city.');
 }
 
-// --- HELPER 3: Robust JSON Extractor ---
-function extractJSON(text) {
+// --- HELPER 3: Read AI Response ---
+function parseAIResponse(text) {
     try { return JSON.parse(text); } 
     catch (e) {
         const match = text.match(/\[.*\]/s);
@@ -48,8 +51,8 @@ function extractJSON(text) {
     }
 }
 
-// --- HELPER 4: Smart Activity Generator ---
-function getSmartDetails(placeData) {
+// --- HELPER 4: Create Activity List ---
+function generateActivityList(placeData) {
     const name = placeData.name.toLowerCase();
     const types = placeData.types || [];
     let activities = ["Standard Entry (~₹200)"];
@@ -63,22 +66,21 @@ function getSmartDetails(placeData) {
     return { activities };
 }
 
-// --- HELPER 5: NEW PRICE LOGIC (The "Most Mentioned" Analyzer) ---
-function extractPriceMode(reviews) {
+// --- HELPER 5: FIND REAL PRICE (The "Most Mentioned" Logic) ---
+// RENAMED: 'extractPriceMode' -> 'findMostCommonPrice'
+function findMostCommonPrice(reviews) {
     if (!reviews || reviews.length === 0) return null;
 
     const pricesFound = [];
-    // Regex to find prices like "Rs 500", "₹200", "500rs", "INR 300"
-    const priceRegex = /(?:rs\.?|₹|inr)\s*(\d+(?:,\d+)*)|(\d+)\s*(?:rs|rupees)/gi;
+    const priceScanner = /(?:rs\.?|₹|inr)\s*(\d+(?:,\d+)*)|(\d+)\s*(?:rs|rupees)/gi;
 
-    reviews.forEach(r => {
-        const text = r.text || "";
+    reviews.forEach(review => {
+        const text = review.text || "";
         let match;
-        while ((match = priceRegex.exec(text)) !== null) {
-            // Group 1 or Group 2 will contain the number (remove commas)
+        while ((match = priceScanner.exec(text)) !== null) {
             const rawNum = (match[1] || match[2]).replace(/,/g, '');
             const price = parseInt(rawNum);
-            // Filter crazy outliers (e.g. phone numbers or year 2023) and very small nums
+            // Ignore years (2024) or phone numbers
             if (price > 10 && price < 10000 && price !== 2023 && price !== 2024 && price !== 2025) {
                 pricesFound.push(price);
             }
@@ -87,190 +89,196 @@ function extractPriceMode(reviews) {
 
     if (pricesFound.length === 0) return null;
 
-    // LOGIC: Find the MODE (Most Mentioned Price Bucket)
-    // We group by 50s (e.g. 180 and 220 both count towards the "200" bucket)
-    const buckets = {};
-    let maxCount = 0;
-    let bestBucket = null;
+    // Logic: Find the price mentioned most often (The "Crowd Favorite")
+    const priceBuckets = {};
+    let highestCount = 0;
+    let mostCommonPrice = null;
 
     pricesFound.forEach(p => {
-        const bucket = Math.round(p / 50) * 50; // Round to nearest 50
-        buckets[bucket] = (buckets[bucket] || 0) + 1;
-        if (buckets[bucket] > maxCount) {
-            maxCount = buckets[bucket];
-            bestBucket = bucket;
+        const roundedPrice = Math.round(p / 50) * 50; // Group similar prices (e.g., 180 & 200)
+        priceBuckets[roundedPrice] = (priceBuckets[roundedPrice] || 0) + 1;
+        
+        if (priceBuckets[roundedPrice] > highestCount) {
+            highestCount = priceBuckets[roundedPrice];
+            mostCommonPrice = roundedPrice;
         }
     });
 
-    // If we have a clear winner, that's our "Most Mentioned Activity Cost"
-    return bestBucket;
+    return mostCommonPrice;
 }
 
-// --- HELPER 6: Fetch Details & Reviews ---
-async function fetchPlaceDetails(placeId) {
+// --- HELPER 6: Get Google Details ---
+async function getGoogleDetails(placeId) {
     try {
-        // Fetching 5 reviews to analyze prices
         const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=editorial_summary,reviews,name&key=${process.env.GOOGLE_API_KEY}`;
         const response = await axios.get(url);
-        const result = response.data.result;
-        return result; 
+        return response.data.result; 
     } catch (e) {
         return null;
     }
 }
 
 // ==========================================
-// 🚀 MAIN API ROUTE
+// 🚀 MAIN ROUTE (Readable Version)
 // ==========================================
 app.post('/api/itinerary', async (req, res) => {
-  console.log("\n🌍 NEW REQUEST:", req.body.filters);
+  console.log("\n🌍 New Trip Request:", req.body.filters);
+  
   let { budget, people = 2, location, radius = 5000, filters = [], hasPrivateVehicle, mileage = 15 } = req.body;
-  const radiusKm = parseInt(radius) / 1000;
+  const maxDistanceKm = parseInt(radius) / 1000;
 
   try {
-    const startLocationStr = await resolveLocation(location);
-    const [startLat, startLng] = startLocationStr.split(',').map(Number);
+    const startCoords = await findCoordinates(location);
+    const [startLat, startLng] = startCoords.split(',').map(Number);
     
-    // --- STEP 1: SEARCH QUERIES ---
-    let searchQueries = [];
-    if (filters.includes("adventure_sports")) searchQueries.push("adventure parks go karting");
-    if (filters.includes("entertainment")) searchQueries.push("arcades bowling malls");
-    if (filters.includes("nature_park")) searchQueries.push("waterfalls viewpoints nature");
-    if (filters.includes("restaurant")) searchQueries.push("restaurants cafes");
-    if (searchQueries.length === 0) searchQueries.push("tourist attractions");
+    // --- 1. PREPARE SEARCH WORDS ---
+    let searchKeywords = [];
+    if (filters.includes("adventure_sports")) searchKeywords.push("adventure parks go karting");
+    if (filters.includes("entertainment")) searchKeywords.push("arcades bowling malls");
+    if (filters.includes("nature_park")) searchKeywords.push("waterfalls viewpoints nature");
+    if (filters.includes("restaurant")) searchKeywords.push("restaurants cafes");
+    if (searchKeywords.length === 0) searchKeywords.push("tourist attractions");
 
-    // --- STEP 2: AI BRAINSTORMING ---
-    const vibeString = searchQueries.join(", ");
-    const prompt = `Recommend 10 distinct outings near ${startLat}, ${startLng} matching keywords: ${vibeString}. Return JSON: [{ "name": "Place Name", "description": "Short summary" }]`;
+    // --- 2. ASK AI BRAIN FOR IDEAS ---
+    const prompt = `Recommend 10 distinct outings near ${startLat}, ${startLng} matching keywords: ${searchKeywords.join(", ")}. Return JSON: [{ "name": "Place Name", "description": "Short summary" }]`;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
-    let placeList = [];
+    const model = aiBrain.getGenerativeModel({ model: "gemini-3.0-pro-preview" });
+    let listOfPlaces = [];
+    
     try {
         const aiResult = await model.generateContent(prompt);
-        placeList = extractJSON(aiResult.response.text()) || [];
-    } catch (e) { console.log("AI Fallback"); }
+        listOfPlaces = parseAIResponse(aiResult.response.text()) || [];
+    } catch (e) { console.log("AI Brain skipped, using Google Search directly."); }
 
-    // --- STEP 3: GOOGLE FALLBACK ---
-    if (placeList.length < 5) {
-        const promises = searchQueries.map(async (q) => {
-            const gUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}&location=${startLat},${startLng}&radius=${radius}&key=${process.env.GOOGLE_API_KEY}`;
+    // --- 3. GOOGLE SEARCH BACKUP ---
+    if (listOfPlaces.length < 5) {
+        const promises = searchKeywords.map(async (word) => {
+            const gUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(word)}&location=${startLat},${startLng}&radius=${radius}&key=${process.env.GOOGLE_API_KEY}`;
             const resp = await axios.get(gUrl);
             return resp.data.results.slice(0, 3).map(p => ({ name: p.name, description: "Popular spot." }));
         });
-        const gRes = await Promise.all(promises);
-        placeList = [...placeList, ...gRes.flat()];
+        const googleResults = await Promise.all(promises);
+        listOfPlaces = [...listOfPlaces, ...googleResults.flat()];
     }
 
-    // --- STEP 4: FILTERING ---
-    let itinerary = [];
+    // --- 4. CHECK EACH PLACE (Filtering) ---
+    let finalItinerary = [];
     const PETROL_PRICE = 108; 
-    const USER_MILEAGE = parseFloat(mileage) || 15;
-    let processedNames = new Set();
+    const VEHICLE_MILEAGE = parseFloat(mileage) || 15;
+    let checkedNames = new Set();
 
-    const processCandidate = async (placeItem) => {
-        const normName = placeItem.name.toLowerCase().trim();
-        if (processedNames.has(normName)) return null;
+    // RENAMED: 'processCandidate' -> 'checkIfPlaceFitsBudget'
+    const checkIfPlaceFitsBudget = async (potentialPlace) => {
+        const cleanName = potentialPlace.name.toLowerCase().trim();
+        if (checkedNames.has(cleanName)) return null;
         
-        const placeUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(placeItem.name)}&location=${startLat},${startLng}&radius=${radius}&key=${process.env.GOOGLE_API_KEY}`;
-        const placeResp = await axios.get(placeUrl);
-        const placeData = placeResp.data.results[0];
+        // Fetch Location Data
+        const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(potentialPlace.name)}&location=${startLat},${startLng}&radius=${radius}&key=${process.env.GOOGLE_API_KEY}`;
+        const searchResp = await axios.get(searchUrl);
+        const placeData = searchResp.data.results[0];
 
         if (!placeData) return null;
-        processedNames.add(normName);
+        checkedNames.add(cleanName);
 
         // Distance Check
-        const pLat = placeData.geometry.location.lat;
-        const pLng = placeData.geometry.location.lng;
-        const exactDist = calculateDistance(startLat, startLng, pLat, pLng);
-        if (exactDist > radiusKm) return null;
+        const placeLat = placeData.geometry.location.lat;
+        const placeLng = placeData.geometry.location.lng;
+        const actualDist = getDistanceFromLatLon(startLat, startLng, placeLat, placeLng);
+        
+        if (actualDist > maxDistanceKm) return null; // Too far
 
-        // Travel Cost Calc
-        const origin = `${startLat},${startLng}`;
-        const dest = `${pLat},${pLng}`;
-        const dirUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${dest}&mode=driving&key=${process.env.GOOGLE_API_KEY}`;
-        const dirResp = await axios.get(dirUrl);
+        // Calculate Travel Cost
+        const startPoint = `${startLat},${startLng}`;
+        const endPoint = `${placeLat},${placeLng}`; // RENAMED from 'dest'
+        const mapUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${startPoint}&destination=${endPoint}&mode=driving&key=${process.env.GOOGLE_API_KEY}`;
+        const mapResp = await axios.get(mapUrl);
         
         let travelCost = 0;
         let travelTime = "20 mins";
-        let distText = `${exactDist.toFixed(1)} km`;
+        let distanceText = `${actualDist.toFixed(1)} km`;
 
-        if (dirResp.data.routes.length > 0) {
-            const leg = dirResp.data.routes[0].legs[0];
-            travelTime = leg.duration.text;
-            distText = leg.distance.text;
-            const distKm = leg.distance.value / 1000;
-            if (hasPrivateVehicle) travelCost = Math.round((distKm / USER_MILEAGE) * PETROL_PRICE);
-            else travelCost = Math.round(50 + (distKm * 22));
+        if (mapResp.data.routes.length > 0) {
+            const trip = mapResp.data.routes[0].legs[0];
+            travelTime = trip.duration.text;
+            distanceText = trip.distance.text;
+            const distInKm = trip.distance.value / 1000;
+            
+            if (hasPrivateVehicle) travelCost = Math.round((distInKm / VEHICLE_MILEAGE) * PETROL_PRICE);
+            else travelCost = Math.round(50 + (distInKm * 22)); // Cab fare
         }
 
-        // ESTIMATED Cost (Placeholder) - We refine this in Step 5
-        let level = placeData.price_level || 1;
-        const priceMap = [0, 200, 600, 1500, 2500];
-        let activityCost = priceMap[level] * people;
+        // Quick Price Estimate (Google Symbol)
+        let priceLevel = placeData.price_level || 1;
+        const estimateTable = [0, 200, 600, 1500, 2500];
+        let ticketPrice = estimateTable[priceLevel] * people;
 
-        if ((activityCost + travelCost) <= budget) {
-             const smartData = getSmartDetails(placeData);
+        // Does it fit the budget?
+        if ((ticketPrice + travelCost) <= budget) {
+             const smartDetails = generateActivityList(placeData);
              return {
                 place_id: placeData.place_id,
                 name: placeData.name,
                 address: placeData.formatted_address,
                 rating: placeData.rating,
                 photo_ref: placeData.photos?.[0]?.photo_reference,
-                activityCost, travelCost, travelTime, distance: distText,
-                totalOptionCost: activityCost + travelCost,
-                activities: smartData.activities,
-                aiDescription: placeItem.description
+                activityCost: ticketPrice,
+                travelCost, 
+                travelTime, 
+                distance: distanceText,
+                totalOptionCost: ticketPrice + travelCost,
+                activities: smartDetails.activities,
+                aiDescription: potentialPlace.description
              };
         }
         return null;
     };
 
-    for (const place of placeList) {
-        if (itinerary.length >= 6) break;
-        const res = await processCandidate(place);
-        if (res) itinerary.push(res);
+    // Run the checks
+    for (const place of listOfPlaces) {
+        if (finalItinerary.length >= 6) break;
+        const validPlace = await checkIfPlaceFitsBudget(place);
+        if (validPlace) finalItinerary.push(validPlace);
     }
 
-    // --- STEP 5: FINAL POLISH & REAL COST ANALYSIS ---
-    // This is where we apply the "Most Mentioned" Logic
-    console.log(" 📝 Analyzing reviews for real costs...");
+    // --- 5. FINAL POLISH (Review Analysis) ---
+    console.log(" 📝 Reading reviews to find real prices...");
     
-    const enrichedItinerary = await Promise.all(itinerary.map(async (item) => {
-        const details = await fetchPlaceDetails(item.place_id);
+    const polishedItinerary = await Promise.all(finalItinerary.map(async (item) => {
+        const googleDetails = await getGoogleDetails(item.place_id);
         
-        // 1. Get Description
-        let finalDesc = item.aiDescription;
-        if (details?.editorial_summary?.overview) finalDesc = details.editorial_summary.overview;
-        else if (details?.reviews?.[0]?.text) finalDesc = details.reviews[0].text.substring(0, 150) + "...";
+        // 1. Better Description
+        let bestDescription = item.aiDescription;
+        if (googleDetails?.editorial_summary?.overview) bestDescription = googleDetails.editorial_summary.overview;
+        else if (googleDetails?.reviews?.[0]?.text) bestDescription = googleDetails.reviews[0].text.substring(0, 150) + "...";
 
-        // 2. RE-CALCULATE COST BASED ON REVIEWS (The PlanIt Feature)
-        let realActivityCost = item.activityCost; // Default to old estimate
-        let costSource = "Estimated (Google Price Level)";
+        // 2. REAL PRICE CHECK
+        let finalTicketPrice = item.activityCost; 
+        let priceSource = "Estimated (Google)";
 
-        if (details?.reviews) {
-            const modePrice = extractPriceMode(details.reviews);
-            if (modePrice) {
-                // If we found a "Most Mentioned" price, use it!
-                realActivityCost = modePrice * people;
-                costSource = `Based on User Reviews (~₹${modePrice}/person)`;
-                console.log(`   💰 Corrected cost for ${item.name}: ₹${modePrice} (was ₹${item.activityCost/people})`);
+        if (googleDetails?.reviews) {
+            const commonPrice = findMostCommonPrice(googleDetails.reviews);
+            if (commonPrice) {
+                finalTicketPrice = commonPrice * people;
+                priceSource = `Verified from Reviews (~₹${commonPrice}/person)`;
+                console.log(`   💰 Updated price for ${item.name}: ₹${commonPrice}`);
             }
         }
 
         return { 
             ...item, 
-            description: finalDesc,
-            activityCost: realActivityCost,
-            totalOptionCost: realActivityCost + item.travelCost,
-            costNote: costSource
+            description: bestDescription,
+            activityCost: finalTicketPrice,
+            totalOptionCost: finalTicketPrice + item.travelCost,
+            costNote: priceSource
         };
     }));
 
     res.json({ 
-        itinerary: enrichedItinerary, 
-        totalCost: enrichedItinerary.length > 0 ? enrichedItinerary[0].totalOptionCost : 0, 
-        budget, people,
-        aiSummary: "Itinerary generated with real-time cost analysis." 
+        itinerary: polishedItinerary, 
+        totalCost: polishedItinerary.length > 0 ? polishedItinerary[0].totalOptionCost : 0, 
+        budget, 
+        people,
+        aiSummary: "Trip options generated." 
     });
 
   } catch (error) {
