@@ -14,6 +14,26 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.get('/', (req, res) => res.send('✅ PlanIt Server v15.0 (Live Cost Analysis Build)'));
 
+// --- REVERSE GEOCODE PROXY ---
+app.post('/api/reverse-geocode', async (req, res) => {
+  const { lat, lng } = req.body;
+  if (!lat || !lng) return res.status(400).json({ error: 'lat and lng required' });
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${process.env.GOOGLE_API_KEY}`;
+    const response = await axios.get(url);
+    if (response.data.status === 'OK' && response.data.results.length > 0) {
+      const components = response.data.results[0].address_components;
+      const locality = components.find(c => c.types.includes('locality'))?.long_name;
+      const area = components.find(c => c.types.includes('sublocality'))?.long_name;
+      const address = area ? `${area}, ${locality}` : locality || response.data.results[0].formatted_address;
+      return res.json({ address });
+    }
+    res.status(404).json({ error: 'Address not found' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- HELPER 1: Haversine Distance ---
 function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371; 
@@ -143,7 +163,7 @@ app.post('/api/itinerary', async (req, res) => {
     const vibeString = searchQueries.join(", ");
     const prompt = `Recommend 10 distinct outings near ${startLat}, ${startLng} matching keywords: ${vibeString}. Return JSON: [{ "name": "Place Name", "description": "Short summary" }]`;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-3-pro-preview" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     let placeList = [];
     try {
         const aiResult = await model.generateContent(prompt);
