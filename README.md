@@ -3,7 +3,7 @@
 **Budget-aware outing planner for India.**  
 Enter your location, budget, and vibe — Planit finds real places you can actually afford, with live cost estimates pulled from user reviews.
 
-🔗 **Live Demo:** [testprox-six.vercel.app](https://testprox-six.vercel.app)
+🔗 **Live Demo:** [planit-v1.vercel.app/](https://planit-v1.vercel.app/)
 
 ---
 
