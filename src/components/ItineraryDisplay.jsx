@@ -4,7 +4,7 @@ import TiltCard from './TiltCard';
 const ItineraryDisplay = ({ itinerary }) => {
     const [expandedId, setExpandedId] = useState(null);
 
-    if (!itinerary || !itinerary.itinerary || itinerary.itinerary.length === 0) {
+    if (!itinerary || itinerary.length === 0) {
         return (
             <div className="glass-card p-10 rounded-2xl text-center">
                 <div className="text-gray-400 mb-2">No options found</div>
@@ -68,18 +68,8 @@ const ItineraryDisplay = ({ itinerary }) => {
 
     return (
         <div className="space-y-8 animate-fade-in-up pb-10">
-            {itinerary.aiSummary && (
-                <div className="glass-card p-6 rounded-2xl border-white/10 bg-gradient-to-r from-gray-900/60 to-gray-800/60 shadow-lg relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl animate-pulse">🤖</div>
-                    <div className="relative z-10">
-                        <h3 className="text-xs font-bold tracking-widest text-blue-400 uppercase mb-2">Mission Intelligence</h3>
-                        <p className="text-gray-200 text-lg leading-relaxed font-light">"{itinerary.aiSummary.replace(/^"|"$/g, '')}"</p>
-                    </div>
-                </div>
-            )}
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {itinerary.itinerary.map((place, idx) => {
+                {itinerary.map((place, idx) => {
                     const theme = getTheme(place.type, place.name);
                     const isExpanded = expandedId === idx;
                     
