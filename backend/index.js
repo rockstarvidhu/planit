@@ -12,7 +12,7 @@ app.use(express.json());
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-app.get('/', (req, res) => res.send('✅ PlanIt Server v15.0 (Live Cost Analysis Build)'));
+app.get('/', (req, res) => res.send('PlanIt Server v16.0 - Photos + Smart Pricing'));
 
 // --- REVERSE GEOCODE PROXY ---
 app.post('/api/reverse-geocode', async (req, res) => {
@@ -36,14 +36,15 @@ app.post('/api/reverse-geocode', async (req, res) => {
 
 // --- HELPER 1: Haversine Distance ---
 function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; 
-  const dLat = (lat2 - lat1) * (Math.PI/180);
-  const dLon = (lon2 - lon1) * (Math.PI/180);
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * (Math.PI/180)) * Math.cos(lat2 * (Math.PI/180)) * Math.sin(dLon/2) * Math.sin(dLon/2); 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  return R * c; 
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
 // --- HELPER 2: Geocoding ---
@@ -58,100 +59,113 @@ async function resolveLocation(location) {
   throw new Error('City not found');
 }
 
-// --- HELPER 3: Robust JSON Extractor ---
+// --- HELPER 3: JSON Extractor ---
 function extractJSON(text) {
-    try { return JSON.parse(text); } 
-    catch (e) {
-        const match = text.match(/\[.*\]/s);
-        if (match) { try { return JSON.parse(match[0]); } catch (e2) { return null; } }
-        return null;
-    }
+  try { return JSON.parse(text); }
+  catch (e) {
+    const match = text.match(/\[.*\]/s);
+    if (match) { try { return JSON.parse(match[0]); } catch (e2) { return null; } }
+    return null;
+  }
 }
 
 // --- HELPER 4: Smart Activity Generator ---
 function getSmartDetails(placeData) {
-    const name = placeData.name.toLowerCase();
-    const types = placeData.types || [];
-    let activities = ["Standard Entry (~₹200)"];
+  const name = placeData.name.toLowerCase();
+  const types = placeData.types || [];
+  let activities = ["Standard Entry (~200)"];
 
-    if (types.includes('amusement_park') || name.includes('wonderla')) activities = ["Entry Ticket (~₹1000)", "Fast Track (~₹1500)"];
-    else if (name.includes('kart') || name.includes('arena')) activities = ["Go-Karting (~₹400)", "Paintball (~₹350)"];
-    else if (types.includes('movie_theater')) activities = ["Movie Ticket (~₹250)", "Popcorn (~₹300)"];
-    else if (types.includes('restaurant') || types.includes('food')) activities = ["Main Course (~₹350)", "Beverages (~₹150)"];
-    else if (types.includes('park')) activities = ["Entry Fee (~₹20)", "Boating (~₹150)"];
+  if (types.includes('amusement_park') || name.includes('wonderla')) activities = ["Entry Ticket (~1000)", "Fast Track (~1500)"];
+  else if (name.includes('kart') || name.includes('arena')) activities = ["Go-Karting (~400)", "Paintball (~350)"];
+  else if (types.includes('movie_theater')) activities = ["Movie Ticket (~250)", "Popcorn (~300)"];
+  else if (types.includes('restaurant') || types.includes('food')) activities = ["Main Course (~350)", "Beverages (~150)"];
+  else if (types.includes('park')) activities = ["Entry Fee (~20)", "Boating (~150)"];
 
-    return { activities };
+  return { activities };
 }
 
-// --- HELPER 5: NEW PRICE LOGIC (The "Most Mentioned" Analyzer) ---
+// --- HELPER 5: Review Price Extractor ---
 function extractPriceMode(reviews) {
-    if (!reviews || reviews.length === 0) return null;
+  if (!reviews || reviews.length === 0) return null;
+  const pricesFound = [];
+  const priceRegex = /(?:rs\.?|inr)\s*(\d+(?:,\d+)*)|(\d+)\s*(?:rs|rupees)/gi;
 
-    const pricesFound = [];
-    // Regex to find prices like "Rs 500", "₹200", "500rs", "INR 300"
-    const priceRegex = /(?:rs\.?|₹|inr)\s*(\d+(?:,\d+)*)|(\d+)\s*(?:rs|rupees)/gi;
+  reviews.forEach(r => {
+    const text = r.text || "";
+    let match;
+    while ((match = priceRegex.exec(text)) !== null) {
+      const rawNum = (match[1] || match[2]).replace(/,/g, '');
+      const price = parseInt(rawNum);
+      if (price > 10 && price < 10000 && price !== 2023 && price !== 2024 && price !== 2025 && price !== 2026) {
+        pricesFound.push(price);
+      }
+    }
+  });
 
-    reviews.forEach(r => {
-        const text = r.text || "";
-        let match;
-        while ((match = priceRegex.exec(text)) !== null) {
-            // Group 1 or Group 2 will contain the number (remove commas)
-            const rawNum = (match[1] || match[2]).replace(/,/g, '');
-            const price = parseInt(rawNum);
-            // Filter crazy outliers (e.g. phone numbers or year 2023) and very small nums
-            if (price > 10 && price < 10000 && price !== 2023 && price !== 2024 && price !== 2025) {
-                pricesFound.push(price);
-            }
-        }
-    });
+  if (pricesFound.length === 0) return null;
 
-    if (pricesFound.length === 0) return null;
+  const buckets = {};
+  let maxCount = 0;
+  let bestBucket = null;
 
-    // LOGIC: Find the MODE (Most Mentioned Price Bucket)
-    // We group by 50s (e.g. 180 and 220 both count towards the "200" bucket)
-    const buckets = {};
-    let maxCount = 0;
-    let bestBucket = null;
+  pricesFound.forEach(p => {
+    const bucket = Math.round(p / 50) * 50;
+    buckets[bucket] = (buckets[bucket] || 0) + 1;
+    if (buckets[bucket] > maxCount) {
+      maxCount = buckets[bucket];
+      bestBucket = bucket;
+    }
+  });
 
-    pricesFound.forEach(p => {
-        const bucket = Math.round(p / 50) * 50; // Round to nearest 50
-        buckets[bucket] = (buckets[bucket] || 0) + 1;
-        if (buckets[bucket] > maxCount) {
-            maxCount = buckets[bucket];
-            bestBucket = bucket;
-        }
-    });
-
-    // If we have a clear winner, that's our "Most Mentioned Activity Cost"
-    return bestBucket;
+  return bestBucket;
 }
 
-// --- HELPER 6: Fetch Details & Reviews ---
+// --- HELPER 6: Fetch Place Details ---
 async function fetchPlaceDetails(placeId) {
-    try {
-        // Fetching 5 reviews to analyze prices
-        const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=editorial_summary,reviews,name&key=${process.env.GOOGLE_API_KEY}`;
-        const response = await axios.get(url);
-        const result = response.data.result;
-        return result; 
-    } catch (e) {
-        return null;
-    }
+  try {
+    const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=editorial_summary,reviews,name&key=${process.env.GOOGLE_API_KEY}`;
+    const response = await axios.get(url);
+    return response.data.result;
+  } catch (e) {
+    return null;
+  }
+}
+
+// --- HELPER 7: Gemini Price Oracle ---
+async function getGeminiPrice(placeName, city) {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const prompt = `What is the typical entry fee or cost per person in INR for "${placeName}" in or near "${city}"? Return ONLY a raw JSON object with no markdown formatting: { "cost": 300, "confidence": "high", "note": "Entry ticket" }. Confidence must be high, medium, or low. If unknown return { "cost": null, "confidence": "low", "note": "Unknown" }.`;
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(text);
+    if (parsed.cost && parsed.cost > 0 && parsed.cost < 10000) return parsed;
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// --- HELPER 8: Build Photo URL ---
+function buildPhotoUrl(photoRef) {
+  if (!photoRef) return null;
+  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${photoRef}&key=${process.env.GOOGLE_API_KEY}`;
 }
 
 // ==========================================
-// 🚀 MAIN API ROUTE
+// MAIN API ROUTE
 // ==========================================
 app.post('/api/itinerary', async (req, res) => {
-  console.log("\n🌍 NEW REQUEST:", req.body.filters);
+  console.log("\nNEW REQUEST:", req.body.filters);
   let { budget, people = 2, location, radius = 5000, filters = [], hasPrivateVehicle, mileage = 15 } = req.body;
   const radiusKm = parseInt(radius) / 1000;
+  const cityName = location;
 
   try {
     const startLocationStr = await resolveLocation(location);
     const [startLat, startLng] = startLocationStr.split(',').map(Number);
-    
-    // --- STEP 1: SEARCH QUERIES ---
+
+    // STEP 1: Search queries from filters
     let searchQueries = [];
     if (filters.includes("adventure_sports")) searchQueries.push("adventure parks go karting");
     if (filters.includes("entertainment")) searchQueries.push("arcades bowling malls");
@@ -159,142 +173,161 @@ app.post('/api/itinerary', async (req, res) => {
     if (filters.includes("restaurant")) searchQueries.push("restaurants cafes");
     if (searchQueries.length === 0) searchQueries.push("tourist attractions");
 
-    // --- STEP 2: AI BRAINSTORMING ---
+    // STEP 2: Gemini brainstorm
     const vibeString = searchQueries.join(", ");
-    const prompt = `Recommend 10 distinct outings near ${startLat}, ${startLng} matching keywords: ${vibeString}. Return JSON: [{ "name": "Place Name", "description": "Short summary" }]`;
+    const prompt = `Recommend 10 distinct outings near ${startLat}, ${startLng} matching keywords: ${vibeString}. Return a JSON array only: [{ "name": "Place Name", "description": "Short summary" }]`;
 
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     let placeList = [];
     try {
-        const aiResult = await model.generateContent(prompt);
-        placeList = extractJSON(aiResult.response.text()) || [];
-    } catch (e) { console.log("AI Fallback"); }
+      const aiResult = await model.generateContent(prompt);
+      placeList = extractJSON(aiResult.response.text()) || [];
+    } catch (e) { console.log("AI brainstorm fallback"); }
 
-    // --- STEP 3: GOOGLE FALLBACK ---
+    // STEP 3: Google Places fallback
     if (placeList.length < 5) {
-        const promises = searchQueries.map(async (q) => {
-            const gUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}&location=${startLat},${startLng}&radius=${radius}&key=${process.env.GOOGLE_API_KEY}`;
-            const resp = await axios.get(gUrl);
-            return resp.data.results.slice(0, 3).map(p => ({ name: p.name, description: "Popular spot." }));
-        });
-        const gRes = await Promise.all(promises);
-        placeList = [...placeList, ...gRes.flat()];
+      const promises = searchQueries.map(async (q) => {
+        const gUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}&location=${startLat},${startLng}&radius=${radius}&key=${process.env.GOOGLE_API_KEY}`;
+        const resp = await axios.get(gUrl);
+        return resp.data.results.slice(0, 3).map(p => ({ name: p.name, description: "Popular spot." }));
+      });
+      const gRes = await Promise.all(promises);
+      placeList = [...placeList, ...gRes.flat()];
     }
 
-    // --- STEP 4: FILTERING ---
+    // STEP 4: Process each candidate
     let itinerary = [];
-    const PETROL_PRICE = 108; 
+    const PETROL_PRICE = 108;
     const USER_MILEAGE = parseFloat(mileage) || 15;
     let processedNames = new Set();
 
     const processCandidate = async (placeItem) => {
-        const normName = placeItem.name.toLowerCase().trim();
-        if (processedNames.has(normName)) return null;
-        
-        const placeUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(placeItem.name)}&location=${startLat},${startLng}&radius=${radius}&key=${process.env.GOOGLE_API_KEY}`;
-        const placeResp = await axios.get(placeUrl);
-        const placeData = placeResp.data.results[0];
+      const normName = placeItem.name.toLowerCase().trim();
+      if (processedNames.has(normName)) return null;
 
-        if (!placeData) return null;
-        processedNames.add(normName);
+      const placeUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(placeItem.name)}&location=${startLat},${startLng}&radius=${radius}&key=${process.env.GOOGLE_API_KEY}`;
+      const placeResp = await axios.get(placeUrl);
+      const placeData = placeResp.data.results[0];
+      if (!placeData) return null;
+      processedNames.add(normName);
 
-        // Distance Check
-        const pLat = placeData.geometry.location.lat;
-        const pLng = placeData.geometry.location.lng;
-        const exactDist = calculateDistance(startLat, startLng, pLat, pLng);
-        if (exactDist > radiusKm) return null;
+      const pLat = placeData.geometry.location.lat;
+      const pLng = placeData.geometry.location.lng;
+      const exactDist = calculateDistance(startLat, startLng, pLat, pLng);
+      if (exactDist > radiusKm) return null;
 
-        // Travel Cost Calc
-        const origin = `${startLat},${startLng}`;
-        const dest = `${pLat},${pLng}`;
-        const dirUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${dest}&mode=driving&key=${process.env.GOOGLE_API_KEY}`;
-        const dirResp = await axios.get(dirUrl);
-        
-        let travelCost = 0;
-        let travelTime = "20 mins";
-        let distText = `${exactDist.toFixed(1)} km`;
+      const origin = `${startLat},${startLng}`;
+      const dest = `${pLat},${pLng}`;
+      const dirUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${dest}&mode=driving&key=${process.env.GOOGLE_API_KEY}`;
+      const dirResp = await axios.get(dirUrl);
 
-        if (dirResp.data.routes.length > 0) {
-            const leg = dirResp.data.routes[0].legs[0];
-            travelTime = leg.duration.text;
-            distText = leg.distance.text;
-            const distKm = leg.distance.value / 1000;
-            if (hasPrivateVehicle) travelCost = Math.round((distKm / USER_MILEAGE) * PETROL_PRICE);
-            else travelCost = Math.round(50 + (distKm * 22));
-        }
+      let travelCost = 0;
+      let travelTime = "20 mins";
+      let distText = `${exactDist.toFixed(1)} km`;
 
-        // ESTIMATED Cost (Placeholder) - We refine this in Step 5
-        let level = placeData.price_level || 1;
-        const priceMap = [0, 200, 600, 1500, 2500];
-        let activityCost = priceMap[level] * people;
+      if (dirResp.data.routes.length > 0) {
+        const leg = dirResp.data.routes[0].legs[0];
+        travelTime = leg.duration.text;
+        distText = leg.distance.text;
+        const distKm = leg.distance.value / 1000;
+        if (hasPrivateVehicle) travelCost = Math.round((distKm / USER_MILEAGE) * PETROL_PRICE);
+        else travelCost = Math.round(50 + (distKm * 22));
+      }
 
-        if ((activityCost + travelCost) <= budget) {
-             const smartData = getSmartDetails(placeData);
-             return {
-                place_id: placeData.place_id,
-                name: placeData.name,
-                address: placeData.formatted_address,
-                rating: placeData.rating,
-                photo_ref: placeData.photos?.[0]?.photo_reference,
-                activityCost, travelCost, travelTime, distance: distText,
-                totalOptionCost: activityCost + travelCost,
-                activities: smartData.activities,
-                aiDescription: placeItem.description
-             };
-        }
-        return null;
+      // Rough pre-check with price_level
+      const level = placeData.price_level || 1;
+      const priceMap = [0, 200, 600, 1500, 2500];
+      const roughCostPerPerson = priceMap[level];
+      const roughTotal = (roughCostPerPerson * people) + travelCost;
+
+      if (roughTotal <= budget) {
+        const smartData = getSmartDetails(placeData);
+        return {
+          place_id: placeData.place_id,
+          name: placeData.name,
+          address: placeData.formatted_address,
+          rating: placeData.rating,
+          photoUrl: buildPhotoUrl(placeData.photos?.[0]?.photo_reference),
+          travelCost,
+          travelTime,
+          distance: distText,
+          activities: smartData.activities,
+          aiDescription: placeItem.description,
+          roughCostPerPerson,
+        };
+      }
+      return null;
     };
 
     for (const place of placeList) {
-        if (itinerary.length >= 6) break;
-        const res = await processCandidate(place);
-        if (res) itinerary.push(res);
+      if (itinerary.length >= 6) break;
+      const result = await processCandidate(place);
+      if (result) itinerary.push(result);
     }
 
-    // --- STEP 5: FINAL POLISH & REAL COST ANALYSIS ---
-    // This is where we apply the "Most Mentioned" Logic
-    console.log(" 📝 Analyzing reviews for real costs...");
-    
+    // STEP 5: Smart pricing — Reviews then Gemini then fallback
+    console.log("Running smart pricing...");
+
     const enrichedItinerary = await Promise.all(itinerary.map(async (item) => {
-        const details = await fetchPlaceDetails(item.place_id);
-        
-        // 1. Get Description
-        let finalDesc = item.aiDescription;
-        if (details?.editorial_summary?.overview) finalDesc = details.editorial_summary.overview;
-        else if (details?.reviews?.[0]?.text) finalDesc = details.reviews[0].text.substring(0, 150) + "...";
+      const details = await fetchPlaceDetails(item.place_id);
 
-        // 2. RE-CALCULATE COST BASED ON REVIEWS (The PlanIt Feature)
-        let realActivityCost = item.activityCost; // Default to old estimate
-        let costSource = "Estimated (Google Price Level)";
+      let finalDesc = item.aiDescription;
+      if (details?.editorial_summary?.overview) finalDesc = details.editorial_summary.overview;
+      else if (details?.reviews?.[0]?.text) finalDesc = details.reviews[0].text.substring(0, 150) + "...";
 
-        if (details?.reviews) {
-            const modePrice = extractPriceMode(details.reviews);
-            if (modePrice) {
-                // If we found a "Most Mentioned" price, use it!
-                realActivityCost = modePrice * people;
-                costSource = `Based on User Reviews (~₹${modePrice}/person)`;
-                console.log(`   💰 Corrected cost for ${item.name}: ₹${modePrice} (was ₹${item.activityCost/people})`);
-            }
+      let costPerPerson = item.roughCostPerPerson;
+      let costConfidence = "low";
+      let costNote = "Estimated";
+
+      // Layer 1: Reviews
+      if (details?.reviews) {
+        const reviewPrice = extractPriceMode(details.reviews);
+        if (reviewPrice) {
+          costPerPerson = reviewPrice;
+          costConfidence = "medium";
+          costNote = "Based on user reviews";
         }
+      }
 
-        return { 
-            ...item, 
-            description: finalDesc,
-            activityCost: realActivityCost,
-            totalOptionCost: realActivityCost + item.travelCost,
-            costNote: costSource
-        };
+      // Layer 2: Gemini (only if reviews gave nothing)
+      if (costConfidence === "low") {
+        const geminiPrice = await getGeminiPrice(item.name, cityName);
+        if (geminiPrice) {
+          costPerPerson = geminiPrice.cost;
+          costConfidence = geminiPrice.confidence;
+          costNote = geminiPrice.note;
+        }
+      }
+
+      const activityCost = costPerPerson * people;
+      const totalOptionCost = activityCost + item.travelCost;
+
+      // Final budget check with real price
+      if (totalOptionCost > budget) return null;
+
+      return {
+        ...item,
+        description: finalDesc,
+        costPerPerson,
+        activityCost,
+        totalOptionCost,
+        costConfidence,
+        costNote,
+      };
     }));
 
-    res.json({ 
-        itinerary: enrichedItinerary, 
-        totalCost: enrichedItinerary.length > 0 ? enrichedItinerary[0].totalOptionCost : 0, 
-        budget, people,
-        aiSummary: "Itinerary generated with real-time cost analysis." 
+    const finalItinerary = enrichedItinerary.filter(Boolean);
+
+    res.json({
+      itinerary: finalItinerary,
+      totalCost: finalItinerary.length > 0 ? finalItinerary[0].totalOptionCost : 0,
+      budget,
+      people,
+      aiSummary: "Itinerary generated with real-time cost analysis.",
     });
 
   } catch (error) {
-    console.error("❌ Error:", error.message);
+    console.error("Error:", error.message);
     res.status(500).json({ error: error.message });
   }
 });
