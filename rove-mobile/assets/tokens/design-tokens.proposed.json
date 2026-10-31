@@ -1,0 +1,34 @@
+{
+  "status": "REFERENCE_SAMPLED_APPROXIMATE_NOT_CANONICAL",
+  "colors": {
+    "forest": "#193829",
+    "forestMuted": "#365E4C",
+    "ivory": "#F5F2E9",
+    "sage": "#DDE4D8",
+    "ink": "#172B24",
+    "mutedText": "#65766E",
+    "line": "#D8DDD4"
+  },
+  "typography": {
+    "display": "Editorial serif; exact family unconfirmed",
+    "body": "Clean sans-serif; exact family unconfirmed"
+  },
+  "spacingScalePx": [
+    4,
+    8,
+    12,
+    16,
+    20,
+    24,
+    32,
+    40,
+    48,
+    64
+  ],
+  "radiiPx": {
+    "small": 8,
+    "medium": 14,
+    "large": 22,
+    "pill": 999
+  }
+}
