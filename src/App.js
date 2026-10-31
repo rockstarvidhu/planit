@@ -11,6 +11,7 @@ function App() {
   const [error, setError] = useState(null);
   const [showSplash, setShowSplash] = useState(true);
   const [currentStep, setCurrentStep] = useState('input'); 
+  const abortControllerRef = React.useRef(null);
 
   // Splash Screen Timer
   useEffect(() => {
@@ -34,6 +35,7 @@ function App() {
   const handleError = (msg) => {
     setLoading(false);
     setError(msg);
+    setCurrentStep('input');
   };
 
   // Reset to initial state
@@ -43,9 +45,20 @@ function App() {
     setCurrentStep('input');
   };
 
+  // Called when user clicks "Cancel Generation" (BUG-02 Fix)
+  const handleCancelGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setLoading(false);
+    setCurrentStep('input');
+    setError(null);
+  };
+
   // Called when user clicks "Find My Plan"
   const handleFormSubmit = () => {
-    setLoading(true); // ✅ Starts the Loading Game
+    abortControllerRef.current = new AbortController();
+    setLoading(true); // Starts the Loading Game
     setError(null);
     setCurrentStep('loading');
   };
@@ -72,9 +85,9 @@ function App() {
                 <LoadingGame />
             </div>
 
-            {/* Cancel Button */}
+            {/* Cancel Button (BUG-02 Fix) */}
             <button 
-                onClick={() => setLoading(false)}
+                onClick={handleCancelGeneration}
                 className="mt-8 text-slate-500 hover:text-white text-xs uppercase tracking-widest underline transition-colors"
             >
                 Cancel Generation
@@ -170,6 +183,7 @@ function App() {
             onItineraryGenerated={handleItineraryGenerated}
             onSubmit={handleFormSubmit}
             onError={handleError}
+            abortControllerRef={abortControllerRef}
           />
         )}
 

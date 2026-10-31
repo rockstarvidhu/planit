@@ -5,16 +5,32 @@
   "type": "commonjs",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "test": "jest --runInBand",
+    "lint": "eslint . --ext .js --max-warnings 0"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "axios": "^1.10.0",
+    "axios": "^1.21.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
-    "express": "^4.18.2"
+    "express": "^4.22.3",
+    "express-rate-limit": "^8.7.2"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "jest": "^30.5.2",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.3.1",
+    "eslint": "^8.57.1"
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "packageManager": "npm@11.19.1",
+  "jest": {
+    "testEnvironment": "node",
+    "setupFiles": [
+      "<rootDir>/test-setup.js"
+    ]
   }
 }

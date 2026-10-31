@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
 import TiltCard from './TiltCard';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? 'https://planit-backend-1fga.onrender.com' : 'http://localhost:5000');
+
+const getPhotoUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
 const ConfidenceBadge = ({ confidence, note }) => {
   const config = {
     high:   { color: 'text-green-400 border-green-500/40 bg-green-500/10',  dot: 'bg-green-400',  label: 'Verified' },
@@ -63,7 +71,7 @@ const ItineraryDisplay = ({ itinerary }) => {
               {place.photoUrl && (
                 <div className="w-full h-44 overflow-hidden rounded-t-3xl">
                   <img
-                    src={place.photoUrl}
+                    src={getPhotoUrl(place.photoUrl)}
                     alt={place.name}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     onError={(e) => { e.target.parentElement.style.display = 'none'; }}
@@ -113,7 +121,7 @@ const ItineraryDisplay = ({ itinerary }) => {
                   </div>
                   <div className="flex items-center gap-2 text-xs font-mono">
                     <span className="text-gray-400">🎯</span>
-                    <span className="text-white">₹{place.costPerPerson}/person × {place.people || ''}</span>
+                    <span className="text-white">₹{place.costPerPerson}/person × {place.people || 1}</span>
                     <span className="text-gray-600">=</span>
                     <span className={`font-bold ${theme.text}`}>₹{place.activityCost}</span>
                   </div>

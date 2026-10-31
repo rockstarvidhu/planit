@@ -9,7 +9,9 @@ const defaultPrefs = {
   food: false,
 };
 
-export default function UserInputForm({ onItineraryGenerated, onSubmit, onError }) {
+const API_BASE_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? 'https://planit-backend-1fga.onrender.com' : 'http://localhost:5000');
+
+export default function UserInputForm({ onItineraryGenerated, onSubmit, onError, abortControllerRef }) {
   const [budget, setBudget] = useState('');
   const [location, setLocation] = useState('');
   const [radius, setRadius] = useState('5000');
@@ -40,7 +42,7 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
 
         try {
             // PROXY CALL: Ask backend for address to avoid CORS errors
-            const response = await fetch('https://planit-backend-1fga.onrender.com/api/reverse-geocode', {
+            const response = await fetch(`${API_BASE_URL}/api/reverse-geocode`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ lat, lng })
@@ -105,10 +107,11 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
     };
 
     try {
-      const response = await fetch('https://planit-backend-1fga.onrender.com/api/itinerary', {
+      const response = await fetch(`${API_BASE_URL}/api/itinerary`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData),
+        signal: abortControllerRef?.current?.signal,
       });
 
       const result = await response.json();
@@ -116,6 +119,10 @@ export default function UserInputForm({ onItineraryGenerated, onSubmit, onError 
       onItineraryGenerated(result);
 
     } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log("Itinerary generation was canceled by user.");
+        return;
+      }
       if (onError) onError(error.message);
     } finally {
       setSubmitting(false);
