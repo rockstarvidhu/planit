@@ -7,7 +7,7 @@ Imported source archive SHA-256: `70851f7017c6316f770ca64f9a8dfebd980738c29f032d
 | Filename | Relative path | Format | Dimensions | Intended use | Status | Known limitations |
 |---|---|---|---|---|---|---|
 | `explorer-walking-original.png` | `assets/mascot/explorer-walking-original.png` | PNG | 1312×1199 px | Standalone explorer mascot; transparent PNG | **APPROVED** | Approved source; only walking pose is supplied. |
-| `rove-wordmark-traced.svg` | `assets/branding/rove-wordmark-traced.svg` | SVG | viewBox 1483×419 | Existing traced wordmark; inspect against approved reference | **PROVISIONAL** | Traced geometry; verify silhouette against approved master. Requires SVG integration. |
+| `rove-wordmark-traced.svg` | `assets/branding/rove-wordmark-traced.svg` | SVG | viewBox 1483×419 | Approved lowercase Rove wordmark; source master for UI, future splash/onboarding | **APPROVED** | Owner approved existing trace in Milestone 3A; keep geometry, proportions, paths, and colors locked. Rendered by `BrandWordmark.tsx`. |
 | `rove-wordmark-preview.png` | `assets/branding/rove-wordmark-preview.png` | PNG | 1400×396 px | Preview of traced wordmark | **REFERENCE** | Raster preview of trace; not a vector or app logo source. |
 | `approved-eight-screen-ui.png` | `assets/references/approved-eight-screen-ui.png` | PNG | 1254×1254 px | Visual UI specification, not screen assets | **REFERENCE** | Flattened screen compositions; not functional screens or extracted assets. |
 | `approved-splash-composition.png` | `assets/references/approved-splash-composition.png` | PNG | 989×2048 px | Flattened splash reference; not directly usable as native splash | **REFERENCE** | Flattened splash with status bar/UI; not a native splash source. |
@@ -41,4 +41,4 @@ Imported source archive SHA-256: `70851f7017c6316f770ca64f9a8dfebd980738c29f032d
 |---|---|---|---|---|---|---|
 | `design-tokens.proposed.json` | `assets/tokens/design-tokens.proposed.json` | JSON | — | Candidate colors, typography descriptors, spacing, radii | **PROVISIONAL** | Approximate reference samples; sampling coordinates and font licenses not supplied. |
 
-**Imported:** 30 graphic files plus one token file. Graphic classification: 1 approved, 26 provisional, 3 reference; token file is provisional.
+**Imported:** 30 graphic files plus one token file. Graphic classification: 2 approved, 25 provisional, 3 reference; token file is provisional.

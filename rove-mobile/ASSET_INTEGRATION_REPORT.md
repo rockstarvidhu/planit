@@ -1,9 +1,11 @@
 # Rove Asset Library v2 integration review
 
-Date: 31 October 2026. Milestone 1 checkpoint: `48c41474d24957ea7bcaea97a9bb7de7f7328e23`.
+Created 31 October 2026; updated 1 November 2026. Milestone 1 checkpoint:
+`48c41474d24957ea7bcaea97a9bb7de7f7328e23`.
 The asset library was imported in Milestone 1 and reviewed for this Milestone 2
-checkpoint. Discover renders only the approved original mascot; no other
-imported artwork is used by a screen or app configuration.
+checkpoint. Discover renders the approved original mascot; no imported
+artwork is used by app configuration. Milestone 2.1 also renders five
+provisional icon paths in the tab bar and Discover location field.
 
 ## Archive validation
 
@@ -32,31 +34,33 @@ Thirty graphic files were copied byte-for-byte with original filenames:
 | Destination | Count | Classification |
 |---|---:|---|
 | `assets/mascot/` | 2 PNG | Original: **APPROVED**. Exact trimmed crop: **PROVISIONAL** for production use. |
-| `assets/branding/` | 1 SVG, 1 PNG | Traced wordmark: **PROVISIONAL** pending silhouette check. Preview: **REFERENCE**. |
+| `assets/branding/` | 1 SVG, 1 PNG | Existing traced wordmark: **APPROVED** by owner in Milestone 3A. Preview: **REFERENCE**. |
 | `assets/references/` | 2 PNG | **REFERENCE** flattened UI/splash compositions only. |
 | `assets/icons/provisional/` | 24 SVG | **PROVISIONAL** candidate icons, not used by the app. |
 | `assets/tokens/` | 1 JSON | **PROVISIONAL** design values, not applied to screens. |
 
-Thus the 30 graphics are **1 APPROVED, 26 PROVISIONAL, 3 REFERENCE**; the one
+Thus the 30 graphics are **2 APPROVED, 25 PROVISIONAL, 3 REFERENCE**; the one
 token file is also PROVISIONAL. Full per-file dimensions, paths, intended uses,
 and limitations are in `ASSET_INVENTORY.md`. No imported file was renamed;
 only parent folders changed. The original ZIP and its metadata were not
 imported into Git.
 
 The archive labels the wordmark `TRACED_VERIFY` despite placing it under
-`approved/`. Its supplied geometry is untouched, but approval of this trace
-against the master wordmark is not documented. The original explorer PNG is
-the sole unambiguous approved production artwork in this archive.
+`approved/`. The repository owner explicitly approved the existing trace in
+Milestone 3A. The supplied SVG remains the locked source master alongside the
+original explorer mascot.
 
 ## SVG and Expo integration
 
 React Native does not treat source SVG paths as ordinary PNG image files.
-Preserve the original wordmark SVG as the master supplied file. When a screen
-needs it, select an Expo-compatible SVG rendering path, such as `react-native-svg`
-with a reviewed build-time transform, and verify the rendered silhouette at
-Android screen densities. The PNG preview is for comparison only. Do not
+Preserve the original wordmark SVG as the master supplied file. Milestone 3A uses `react-native-svg` to render the exact source path and
+viewBox in `src/components/BrandWordmark.tsx`; verify the silhouette on a
+physical Android device before release. The PNG preview is for comparison only. Do not
 replace the path with a font approximation or rasterize the master in place.
-The provisional icon SVGs must not be wired into navigation until approved.
+Milestone 2.1 uses the candidate `home`, `plans`, `bookmark`, `user`, and
+`search` path geometry through `src/components/LineIcon.tsx` at the owner's
+direction. The source SVG files are unchanged. These remain provisional UI
+elements and require visual sign-off before release.
 
 The two reference PNGs include flattened device UI and imagery. They are
 design guidance, not native screens, splash assets, or sources of extractable
@@ -86,8 +90,8 @@ library was installed.
 1. Final approved Android launcher icon, adaptive foreground/background, and
    monochrome layer, with required sizes and safe zones.
 2. Standalone splash scenery free of embedded status bar, wordmark, or UI.
-3. Verified master wordmark vector and alternate lockups if required; confirm
-   whether the supplied trace matches the approved mark.
+3. Additional wordmark lockups if future screens require them; the existing
+   trace is approved and locked for the current UI.
 4. Additional approved mascot poses and empty-state illustrations if those
    planned screens require them. The supplied original has one walking pose.
 5. Exact typefaces, distribution licenses, and approved color/spacing/radius

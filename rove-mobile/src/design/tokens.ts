@@ -1,4 +1,6 @@
-/** Milestone 2 working tokens. The supplied reference values remain provisional. */
+import { Platform } from 'react-native';
+
+/** Working values guided by the approved reference; final brand tokens remain provisional. */
 export const tokens = {
   status: 'PROVISIONAL' as const,
   colors: {
@@ -13,14 +15,14 @@ export const tokens = {
     white: '#FFFFFF',
   },
   typography: {
-    // Android system families until the owner supplies approved, licensed fonts.
-    displayFamily: 'serif',
-    bodyFamily: 'sans-serif',
-    sizes: { caption: 12, body: 15, section: 19, title: 34 },
-    lineHeights: { caption: 17, body: 23, section: 26, title: 39 },
+    // Platform fonts require no bundled font license.
+    displayFamily: Platform.OS === 'web' ? 'Georgia' : 'serif',
+    bodyFamily: Platform.OS === 'web' ? 'Arial' : 'sans-serif',
+    sizes: { micro: 11, caption: 12, body: 14, section: 19, title: 30 },
+    lineHeights: { caption: 17, body: 21, section: 26, title: 36 },
   },
   spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 },
-  radii: { small: 8, input: 14, pill: 999 },
+  radii: { small: 8, input: 18, pill: 999 },
   borders: { hairline: 1, color: '#D8DDD4' },
-  layout: { contentMaxWidth: 600, pagePadding: 24, touchTarget: 48, tabBarMinHeight: 60 },
+  layout: { webCanvasWidth: 430, contentMaxWidth: 430, pagePadding: 22, touchTarget: 48, tabBarMinHeight: 64 },
 } as const;

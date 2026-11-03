@@ -1,0 +1,25 @@
+{
+  "light": {
+    "background": "#F6F3EB",
+    "surface": "#FFFEFA",
+    "text": "#182E25",
+    "muted": "#63766B",
+    "accent": "#244A39",
+    "border": "#D9DED5"
+  },
+  "dark": {
+    "background": "#080908",
+    "surface": "#171A18",
+    "interactive": "#202520",
+    "text": "#F5F3EB",
+    "muted": "#A7B2A9",
+    "accent": "#88AC91",
+    "border": "#303831"
+  },
+  "type": {
+    "display": "DM Serif Display Regular",
+    "body": "Inter Regular",
+    "medium": "Inter Medium",
+    "semibold": "Inter SemiBold"
+  }
+}

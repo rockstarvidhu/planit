@@ -6,13 +6,13 @@ references. Asset source files were not edited.
 
 ## Wordmark
 
-The `rove-wordmark-traced.svg` and its PNG preview are an organic lowercase
-`rove` silhouette in forest green, broadly consistent with the wordmark visible
-in both approved references. The references are scaled and softened, so their
-edges cannot establish whether the traced curves, spacing, and letter shapes
-match an approved vector master. The archive itself marks the trace
-`TRACED_VERIFY`. **Exact brand approval remains unresolved.** The Milestone 2
-screens do not render the SVG, preview, or a font approximation of the logo.
+The repository owner explicitly approved the existing lowercase
+`assets/branding/rove-wordmark-traced.svg` for Rove UI use in Milestone 3A.
+Its original geometry, proportions, paths, and forest-green fill are locked.
+`src/components/BrandWordmark.tsx` renders the exact SVG path and viewBox via
+`react-native-svg` on Android and web; the source SVG remains the master for
+future splash and onboarding work. The PNG preview remains a reference only.
+This approval supersedes the earlier `TRACED_VERIFY` status in the archive.
 
 ## Mascot
 
@@ -24,8 +24,11 @@ Milestone 2 renders only `explorer-walking-original.png`.
 
 ## Other assets
 
-All candidate icons and the supplied token JSON remain provisional. The tabs
-use text labels instead of those icons. Screen typography uses Android system
-serif/sans-serif families until approved, licensed fonts are supplied. Active
-Milestone 2 token values are working interpretations of the references and
-are not final brand specifications.
+All candidate icons and the supplied token JSON remain provisional. Milestone
+2.1 uses exact path geometry from five candidate icons (`home`, `plans`,
+`bookmark`, `user`, and `search`) in `src/components/LineIcon.tsx`; their
+original SVGs are unchanged and this use does not grant final visual approval.
+Screen typography uses Android system serif/sans-serif families and web system
+Georgia/Arial until approved, licensed fonts are supplied. Active token values
+are working interpretations of the references and are not final brand
+specifications.

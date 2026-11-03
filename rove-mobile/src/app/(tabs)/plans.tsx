@@ -1,36 +1,7 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { EditorialSection } from '../../components/EditorialSection';
+import { EmptyState } from '../../components/EmptyState';
 import { ScreenShell } from '../../components/ScreenShell';
-import { tokens } from '../../design/tokens';
-
-export default function Plans() {
-  return (
-    <ScreenShell>
-      <Text style={styles.eyebrow}>YOUR DAYS OUT</Text>
-      <Text style={styles.title}>Plans</Text>
-      <Text style={styles.intro}>A place for the days you want to make happen.</Text>
-
-      <EditorialSection title="Coming up">
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No upcoming plans yet</Text>
-          <Text style={styles.emptyBody}>When you make a plan, it will appear here.</Text>
-        </View>
-      </EditorialSection>
-      <EditorialSection title="Past plans">
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>Your story starts here</Text>
-          <Text style={styles.emptyBody}>Past outings will have their own place.</Text>
-        </View>
-      </EditorialSection>
-    </ScreenShell>
-  );
-}
-
-const styles = StyleSheet.create({
-  eyebrow: { color: tokens.colors.forestMuted, fontSize: tokens.typography.sizes.caption, fontWeight: '700', letterSpacing: 1.6 },
-  title: { color: tokens.colors.ink, fontFamily: tokens.typography.displayFamily, fontSize: tokens.typography.sizes.title, lineHeight: tokens.typography.lineHeights.title, marginTop: tokens.spacing.xxl },
-  intro: { color: tokens.colors.forestMuted, fontSize: tokens.typography.sizes.body, lineHeight: tokens.typography.lineHeights.body, marginTop: tokens.spacing.sm },
-  empty: { paddingVertical: tokens.spacing.xl },
-  emptyTitle: { color: tokens.colors.ink, fontSize: tokens.typography.sizes.body, fontWeight: '600' },
-  emptyBody: { color: tokens.colors.mutedText, fontSize: tokens.typography.sizes.body, lineHeight: tokens.typography.lineHeights.body, marginTop: tokens.spacing.sm },
-});
+import { fonts, useRoveTheme } from '../../design/theme';
+export default function Plans(){const {colors}=useRoveTheme();return <ScreenShell><Text style={[styles.eyebrow,{color:colors.accent}]}>YOUR DAYS OUT</Text><Text style={[styles.title,{color:colors.text}]}>Plans</Text><Text style={[styles.intro,{color:colors.muted}]}>A place for the days you want to make happen.</Text><EditorialSection title="Coming up"><EmptyState title="No upcoming plans yet" body="When you make a plan, it will appear here." exploreAction/></EditorialSection><EditorialSection title="Past plans"><EmptyState title="Your story starts here" body="Past outings will have their own place."/></EditorialSection></ScreenShell>}
+const styles=StyleSheet.create({eyebrow:{fontFamily:fonts.semibold,fontSize:11,letterSpacing:1.3},title:{fontFamily:fonts.display,fontSize:32,lineHeight:39,marginTop:32},intro:{fontFamily:fonts.body,fontSize:14,lineHeight:21,marginTop:8}});

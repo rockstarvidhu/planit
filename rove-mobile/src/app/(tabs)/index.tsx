@@ -1,63 +1,29 @@
-import { useState } from 'react';
-import { Image, Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
-import { EditorialSection } from '../../components/EditorialSection';
+import { Link } from 'expo-router';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { CategoryChips } from '../../components/CategoryChips';
+import { DiscoverHeader } from '../../components/DiscoverHeader';
+import { DiscoverPlanningCard } from '../../components/DiscoverPlanningCard';
+import { DiscoverySearch } from '../../components/DiscoverySearch';
+import { EmptyState } from '../../components/EmptyState';
+import { PlaceCard } from '../../components/PlaceCard';
 import { ScreenShell } from '../../components/ScreenShell';
-import { tokens } from '../../design/tokens';
+import { demoPlaces } from '../../data/demoPlaces';
+import { fonts, useRoveTheme } from '../../design/theme';
+import { useDiscovery } from '../../state/DiscoveryContext';
+import { filterPlaces } from '../../utils/filterPlaces';
 
-const mascot = require('../../../assets/mascot/explorer-walking-original.png');
-
-export default function Discover() {
-  const [location, setLocation] = useState('');
-
-  return (
-    <ScreenShell>
-      <Text style={styles.eyebrow}>DISCOVER</Text>
-      <View style={styles.hero}>
-        <View style={styles.heroCopy}>
-          <Text style={styles.title}>Where to today?</Text>
-          <Text style={styles.intro}>Good places, closer to home.</Text>
-        </View>
-        <Image source={mascot} resizeMode="contain" style={styles.mascot} accessibilityLabel="Rove explorer mascot" />
-      </View>
-
-      <Text style={styles.label}>Start with a place</Text>
-      <TextInput
-        accessibilityLabel="City or area"
-        autoCapitalize="words"
-        autoCorrect={false}
-        onChangeText={setLocation}
-        onSubmitEditing={Keyboard.dismiss}
-        placeholder="City or area"
-        placeholderTextColor={tokens.colors.mutedText}
-        returnKeyType="done"
-        style={styles.input}
-        value={location}
-      />
-      <Text style={styles.helper}>
-        {location.trim() ? `Exploring from ${location.trim()} — suggestions arrive in a later milestone.`
-          : 'Enter a starting point. Suggestions arrive in a later milestone.'}
-      </Text>
-
-      <EditorialSection title="For your kind of day">
-        <View style={styles.row}><Text style={styles.rowTitle}>Food & drinks</Text><Text style={styles.rowNote}>Coming soon</Text></View>
-        <View style={styles.row}><Text style={styles.rowTitle}>Nature & outdoors</Text><Text style={styles.rowNote}>Coming soon</Text></View>
-        <View style={styles.row}><Text style={styles.rowTitle}>Culture & more</Text><Text style={styles.rowNote}>Coming soon</Text></View>
-      </EditorialSection>
-    </ScreenShell>
-  );
+export default function Discover(){
+  const {query,setQuery,category,setCategory,location}=useDiscovery();const {colors}=useRoveTheme();
+  const places=filterPlaces(demoPlaces,query,category);
+  return <ScreenShell>
+    <DiscoverHeader/>
+    <View style={styles.search}><DiscoverySearch value={query} onChangeText={setQuery}/></View>
+    <View style={styles.planner}><DiscoverPlanningCard/></View>
+    <View style={styles.chips}><CategoryChips selected={category} onSelect={setCategory}/></View>
+    <View style={styles.sectionHead}><Text style={[styles.sectionTitle,{color:colors.text}]}>{location?.label.toLowerCase().includes('bengaluru')?'Popular near you':'Places to explore'}</Text><Link href="/places" asChild><Pressable accessibilityRole="button" style={styles.seeAll}><Text style={{color:colors.accent,fontFamily:fonts.medium,fontSize:14}}>See all</Text></Pressable></Link></View>
+    <View style={styles.captionRow}><Text style={[styles.sampleNotice,{color:colors.muted}]}>SAMPLE PLACES · NOT LIVE RESULTS</Text><Link href="/location" asChild><Pressable accessibilityRole="button" accessibilityLabel="Choose or change area"><Text style={{color:colors.accent,fontFamily:fonts.medium,fontSize:11}}>{location?.label??'Choose area'}</Text></Pressable></Link></View>
+    {places.length?<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cards} contentContainerStyle={styles.cardRow}>{places.map((place)=><PlaceCard key={place.id} place={place}/>)}</ScrollView>:<EmptyState title="No sample places found" body="Try another search or category. These examples are not live nearby results."/>}
+    {(query||category)&&<Pressable accessibilityRole="button" onPress={()=>{setQuery('');setCategory(null);}} style={styles.reset}><Text style={{color:colors.accent,fontFamily:fonts.semibold,fontSize:13}}>Clear filters</Text></Pressable>}
+  </ScreenShell>;
 }
-
-const styles = StyleSheet.create({
-  eyebrow: { color: tokens.colors.forestMuted, fontSize: tokens.typography.sizes.caption, fontWeight: '700', letterSpacing: 1.6 },
-  hero: { flexDirection: 'row', alignItems: 'center', marginTop: tokens.spacing.xxl, marginBottom: tokens.spacing.xxxl },
-  heroCopy: { flex: 1, paddingRight: tokens.spacing.sm },
-  title: { color: tokens.colors.ink, fontFamily: tokens.typography.displayFamily, fontSize: tokens.typography.sizes.title, lineHeight: tokens.typography.lineHeights.title },
-  intro: { color: tokens.colors.forestMuted, fontSize: tokens.typography.sizes.body, lineHeight: tokens.typography.lineHeights.body, marginTop: tokens.spacing.sm },
-  mascot: { width: 92, height: 100 },
-  label: { color: tokens.colors.ink, fontSize: tokens.typography.sizes.body, fontWeight: '600', marginBottom: tokens.spacing.md },
-  input: { backgroundColor: tokens.colors.paper, borderColor: tokens.colors.line, borderWidth: tokens.borders.hairline, borderRadius: tokens.radii.input, color: tokens.colors.ink, fontSize: tokens.typography.sizes.body, minHeight: tokens.layout.touchTarget, paddingHorizontal: tokens.spacing.lg },
-  helper: { color: tokens.colors.mutedText, fontSize: tokens.typography.sizes.caption, lineHeight: tokens.typography.lineHeights.caption, marginTop: tokens.spacing.sm },
-  row: { minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomColor: tokens.colors.line, borderBottomWidth: tokens.borders.hairline },
-  rowTitle: { color: tokens.colors.ink, fontSize: tokens.typography.sizes.body },
-  rowNote: { color: tokens.colors.mutedText, fontSize: tokens.typography.sizes.caption },
-});
+const styles=StyleSheet.create({search:{marginTop:22},planner:{marginTop:18},chips:{marginTop:15},sectionHead:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginTop:27},sectionTitle:{fontFamily:fonts.semibold,fontSize:20,lineHeight:26},seeAll:{minHeight:44,justifyContent:'center',paddingLeft:10},captionRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:9},sampleNotice:{fontFamily:fonts.body,fontSize:9,letterSpacing:0.4},cards:{marginHorizontal:-22},cardRow:{paddingHorizontal:22,gap:12,paddingBottom:5},reset:{minHeight:44,alignSelf:'flex-start',justifyContent:'center',marginTop:8}});
