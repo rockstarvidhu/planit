@@ -10,7 +10,8 @@
       "supportsTablet": true
     },
     "android": {
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.rockstarvidhu.rovemobile"
     },
     "plugins": [
       "expo-router",

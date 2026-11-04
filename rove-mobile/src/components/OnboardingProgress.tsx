@@ -6,4 +6,4 @@ export function OnboardingProgress({ current }: { current: 1 | 2 }) {
     {[1,2].map((step) => <View key={step} style={[styles.bar,{ backgroundColor: step <= current ? colors.accent : colors.border }]} />)}
   </View>;
 }
-const styles = StyleSheet.create({ row: { flexDirection:'row', gap:8, marginTop: 24 }, bar: { height:4, flex:1, borderRadius:2 } });
+const styles = StyleSheet.create({ row: { flexDirection:'row', gap:8, alignItems:'center' }, bar: { width:36, height:4, borderRadius:2 } });

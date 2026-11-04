@@ -3,7 +3,7 @@ import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
 import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
 import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -17,10 +17,13 @@ SplashScreen.preventAutoHideAsync();
 
 function RootContent() {
   const { ready } = useDiscovery();
+  const pathname = usePathname();
   const { mode, colors } = useRoveTheme();
   const [fontsLoaded, fontError] = useFonts({ DMSerifDisplay_400Regular, Inter_400Regular, Inter_500Medium, Inter_600SemiBold });
   const prepared = ready && (fontsLoaded || !!fontError);
-  useEffect(() => { if (prepared) SplashScreen.hideAsync(); }, [prepared]);
+  // Entry hides the native splash only after its illustration has loaded.
+  // Direct links to other routes still need a way to dismiss it.
+  useEffect(() => { if (prepared && pathname !== '/') SplashScreen.hideAsync(); }, [prepared, pathname]);
   if (!prepared) return null;
   return <SafeAreaProvider style={{ flex: 1, backgroundColor: colors.outer }}>
     <View style={[styles.canvas, { backgroundColor: colors.background }]}>
