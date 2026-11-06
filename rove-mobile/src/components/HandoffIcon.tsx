@@ -1,7 +1,7 @@
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 /** Geometry copied from design-handoff/.../icons/provisional (24×24 candidates). */
-export type HandoffIconName = 'compass'|'map'|'bookmark'|'bookmark-filled'|'user'|'wallet'|'users'|'clock'|'coffee'|'utensils'|'mountain'|'calendar-heart'|'arrow-right'|'search'|'close'|'map-pin';
+export type HandoffIconName = 'compass'|'map'|'bookmark'|'bookmark-filled'|'user'|'wallet'|'users'|'clock'|'coffee'|'utensils'|'mountain'|'calendar-heart'|'arrow-right'|'search'|'close'|'map-pin'|'movie'|'tree';
 export function HandoffIcon({ name, color, size = 22 }: { name: HandoffIconName; color: string; size?: number }) {
   const shared = { stroke: color, strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" {...shared}>
@@ -21,5 +21,7 @@ export function HandoffIcon({ name, color, size = 22 }: { name: HandoffIconName;
     {name==='search'&&<><Circle cx="10.5" cy="10.5" r="6.5"/><Path d="m16 16 5 5"/></>}
     {name==='close'&&<Path d="M5 5l14 14M19 5 5 19"/>}
     {name==='map-pin'&&<><Path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0z"/><Circle cx="12" cy="10" r="2.5"/></>}
+    {name==='movie'&&<><Rect x="3" y="7" width="18" height="14" rx="2"/><Path d="M3 11h18M5 7l3-4h4l-3 4M13 7l3-4h4l-3 4"/></>}
+    {name==='tree'&&<Path d="m12 2 7 9h-4l5 7H4l5-7H5zM12 18v4"/>}
   </Svg>;
 }
