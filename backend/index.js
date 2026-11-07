@@ -8,6 +8,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { LIMITS, HttpError, invalid, unavailable, numeric, bodyObject, proxyTrust,
   safeLog, route, googleJSON, photoImage } = require('./security');
 const { evaluateBudget, BudgetInputError } = require('./budget-engine');
+const { generateItineraries, ItineraryInputError } = require('./itinerary-engine');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -63,6 +64,14 @@ const budgetLimiter = makeLimiter({
   message: { error: 'Too many budget requests from this IP, please try again after 15 minutes.' }
 });
 
+const plansLimiter = makeLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many plan requests from this IP, please try again after 15 minutes.' }
+});
+
 const reverseGeocodeLimiter = makeLimiter({
   windowMs: 15 * 60 * 1000,
   limit: 50,
@@ -96,6 +105,16 @@ app.post('/api/budget/evaluate', budgetLimiter, route((req, res) => {
     res.json(evaluateBudget(req.body));
   } catch (error) {
     if (error instanceof BudgetInputError) throw invalid(error.field);
+    throw error;
+  }
+}, 0));
+
+app.post('/api/plans/generate', plansLimiter, route((req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    res.json(generateItineraries(req.body));
+  } catch (error) {
+    if (error instanceof ItineraryInputError) throw invalid(error.field);
     throw error;
   }
 }, 0));

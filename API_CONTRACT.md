@@ -14,6 +14,7 @@ The current mobile TypeScript types are in `rove-mobile/src/types/api.ts`.
 | `POST /api/reverse-geocode` | JSON `{lat, lng}`; finite numbers or strict numeric strings within latitude `-90..90` and longitude `-180..180` | `200` JSON `{address: string}`. A genuine provider `ZERO_RESULTS` is `404`. |
 | `POST /api/itinerary` | JSON with required integer `budget` (`100..10000000`) and nonempty `location` (at most 200 characters). Optional integer `people` (`1..50`, default 2), integer `radius` in meters (`1000..50000`, default 5000), up to four string `filters`, boolean `hasPrivateVehicle` (default false), and `mileage` (`5..60`, default 15). `mileage: null` is accepted only without a private vehicle. | `200` JSON `{itinerary, totalCost, budget, people, aiSummary, warnings?}`. `warnings` is present when optional AI fails but usable nonempty results remain. A genuine Places `ZERO_RESULTS` can yield an empty itinerary. |
 | `POST /api/budget/evaluate` | JSON `{currency:"INR", budgetAmount, budgetMode:"total"\|"perPerson", people, contingencyPercent?, expenses}`. All money is integer INR. See `backend/BUDGET_ENGINE.md` for the expense schema and bounds. | `200` JSON with effective budgets, reserve, nullable cost totals, remaining budget, utilization basis points, affordability, itemized breakdown and warnings. No provider calls. |
+| `POST /api/plans/generate` | JSON `{preferences, candidates, travelLegs, weights?}` with INR budget, offset-aware start time, structured places/opening windows and directed travel data. See `backend/ITINERARY_ENGINE.md` for the full schema and limits. | `200` JSON `{status, plans, search, warnings}`. Plans include timed stops, legs, expenses, the Budget Engine evaluation and ranking. `no_feasible_plan` has an empty array. No provider calls. |
 | `GET /api/photo?ref=…&maxwidth=…` | `ref` is 10–800 ASCII letters, digits, underscores, hyphens, dots, tildes or plus signs; optional integer `maxwidth` is `100..1600` (default 800) | `200` JPEG/PNG/GIF/WebP bytes, `nosniff`, private five-minute cache. Errors are JSON with `no-store`. |
 
 Current itinerary items use **`place_id`**, not `placeId`. They also include
@@ -41,6 +42,8 @@ authentication. Clients should distinguish valid empty results from failures.
 The budget evaluation route has its own limit of 60 requests per IP per 15
 minutes, still subject to the general limit. It returns `no-store` and uses
 the same safe `400` error envelope as other validated routes.
+The deterministic plan route has a 20-request limit per IP per 15 minutes,
+also under the general limit; it returns `no-store` and the same error envelope.
 
 The backend accepts JSON bodies up to 10 KiB. Its photo proxy enforces HTTPS
 redirect allowlists, at most three redirects, image signatures and a 4 MiB
