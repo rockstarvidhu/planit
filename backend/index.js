@@ -7,6 +7,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const { LIMITS, HttpError, invalid, unavailable, numeric, bodyObject, proxyTrust,
   safeLog, route, googleJSON, photoImage } = require('./security');
+const { evaluateBudget, BudgetInputError } = require('./budget-engine');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -54,6 +55,14 @@ const itineraryLimiter = makeLimiter({
   message: { error: 'Too many itinerary requests from this IP, please try again after 15 minutes.' }
 });
 
+const budgetLimiter = makeLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many budget requests from this IP, please try again after 15 minutes.' }
+});
+
 const reverseGeocodeLimiter = makeLimiter({
   windowMs: 15 * 60 * 1000,
   limit: 50,
@@ -80,6 +89,16 @@ if (process.env.GEMINI_API_KEY) {
 }
 
 app.get('/', (req, res) => res.send('PlanIt Server v16.1 - Secured Photos + Smart Pricing'));
+
+app.post('/api/budget/evaluate', budgetLimiter, route((req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    res.json(evaluateBudget(req.body));
+  } catch (error) {
+    if (error instanceof BudgetInputError) throw invalid(error.field);
+    throw error;
+  }
+}, 0));
 
 // --- PHOTO PROXY ENDPOINT ---
 app.get('/api/photo', photoLimiter, route(async (req, res, context) => {
