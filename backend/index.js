@@ -10,6 +10,7 @@ const { LIMITS, HttpError, invalid, unavailable, numeric, bodyObject, proxyTrust
 const { evaluateBudget, BudgetInputError } = require('./budget-engine');
 const { generateItineraries, ItineraryInputError } = require('./itinerary-engine');
 const { discoverPlaces } = require('./providers/google-places');
+const { computeRouteMatrix } = require('./providers/google-routes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -73,6 +74,14 @@ const placesDiscoveryLimiter = makeLimiter({
   message: { error: 'Too many place discovery requests from this IP, please try again after 15 minutes.' }
 });
 
+const routesMatrixLimiter = makeLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: 8,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many route matrix requests from this IP, please try again after 15 minutes.' }
+});
+
 const plansLimiter = makeLimiter({
   windowMs: 15 * 60 * 1000,
   limit: 20,
@@ -131,6 +140,11 @@ app.post('/api/plans/generate', plansLimiter, route((req, res) => {
 app.post('/api/places/discover', placesDiscoveryLimiter, route(async (req, res, context) => {
   res.set('Cache-Control', 'no-store');
   res.json(await discoverPlaces(req.body, { context }));
+}, 1));
+
+app.post('/api/routes/matrix', routesMatrixLimiter, route(async (req, res, context) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(await computeRouteMatrix(req.body, { context }));
 }, 1));
 
 // --- PHOTO PROXY ENDPOINT ---

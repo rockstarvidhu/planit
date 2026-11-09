@@ -7,3 +7,6 @@ process.env.ALLOWED_ORIGINS = 'http://localhost:3000,https://planit-v1.vercel.ap
 process.env.ROVE_PLACES_MODE = 'disabled';
 process.env.ROVE_PLACES_LIVE_ENABLED = 'false';
 process.env.ROVE_PLACES_ENTERPRISE_FIELDS_ENABLED = 'false';
+process.env.ROVE_ROUTES_MODE = 'disabled';
+process.env.ROVE_ROUTES_LIVE_ENABLED = 'false';
+process.env.ROVE_ROUTES_TRAFFIC_ENABLED = 'false';

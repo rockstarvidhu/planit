@@ -16,6 +16,7 @@ The current mobile TypeScript types are in `rove-mobile/src/types/api.ts`.
 | `POST /api/budget/evaluate` | JSON `{currency:"INR", budgetAmount, budgetMode:"total"\|"perPerson", people, contingencyPercent?, expenses}`. All money is integer INR. See `backend/BUDGET_ENGINE.md` for the expense schema and bounds. | `200` JSON with effective budgets, reserve, nullable cost totals, remaining budget, utilization basis points, affordability, itemized breakdown and warnings. No provider calls. |
 | `POST /api/plans/generate` | JSON `{preferences, candidates, travelLegs, weights?}` with INR budget, offset-aware start time, structured places/opening windows and directed travel data. See `backend/ITINERARY_ENGINE.md` for the full schema and limits. | `200` JSON `{status, plans, search, warnings}`. Plans include timed stops, legs, expenses, the Budget Engine evaluation and ranking. `no_feasible_plan` has an empty array. No provider calls. |
 | `POST /api/places/discover` | JSON `{latitude, longitude, radiusMeters, categories, limit?, includeOpeningHours?, plannedAt?}`. Coordinates are finite within world bounds; integer radius `100..10000`; 1–3 unique supported categories; integer limit `1..12` (default 8). `plannedAt` requires an offset-aware timestamp and is mandatory when hours are requested. | `200` JSON `{status:"ok", provider, candidates, attribution, warnings, skipped}`. Candidates have server-generated provenance, unknown visit duration and unknown INR price. Live mode is disabled by default; fixture mode uses fictional data outside production. See `backend/GOOGLE_PLACES_ADAPTER.md`. |
+| `POST /api/routes/matrix` | JSON `{origins:[{id,latitude,longitude}], destinations:[{id,latitude,longitude}], mode:"walk"\|"drive", departureTime?}`. Each list has 1–6 unique IDs, at most 36 origin × destination elements. `departureTime` is drive-only, offset-aware, within seven days, and requires an explicit traffic flag. | `200` JSON `{status:"ok"\|"partial"\|"unavailable",provider,mode,legs,failed,warnings,attribution,usage}`. Successful directed legs have provider duration/distance and unknown transport cost. Failed pairs are explicit; live mode is disabled by default. See `backend/GOOGLE_ROUTES_ADAPTER.md`. |
 | `GET /api/photo?ref=…&maxwidth=…` | `ref` is 10–800 ASCII letters, digits, underscores, hyphens, dots, tildes or plus signs; optional integer `maxwidth` is `100..1600` (default 800) | `200` JPEG/PNG/GIF/WebP bytes, `nosniff`, private five-minute cache. Errors are JSON with `no-store`. |
 
 Current itinerary items use **`place_id`**, not `placeId`. They also include
@@ -48,6 +49,9 @@ also under the general limit; it returns `no-store` and the same error envelope.
 Place discovery has a separate 10-request limit per IP per 15 minutes, also
 under the general limit. Disabled mode and provider failures return a safe
 error envelope rather than a successful empty candidate list.
+The route matrix endpoint has a separate 8-request limit per IP per 15 minutes,
+also under the general limit. It performs at most one provider request per
+operation and rejects oversized matrices before billing.
 
 The backend accepts JSON bodies up to 10 KiB. Its photo proxy enforces HTTPS
 redirect allowlists, at most three redirects, image signatures and a 4 MiB
