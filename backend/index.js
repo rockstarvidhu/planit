@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { createHash } = require('node:crypto');
 
 const { LIMITS, HttpError, invalid, unavailable, numeric, bodyObject, proxyTrust,
   safeLog, route, googleJSON, photoImage } = require('./security');
@@ -11,6 +12,7 @@ const { evaluateBudget, BudgetInputError } = require('./budget-engine');
 const { generateItineraries, ItineraryInputError } = require('./itinerary-engine');
 const { discoverPlaces } = require('./providers/google-places');
 const { computeRouteMatrix } = require('./providers/google-routes');
+const { createPlan } = require('./planning-orchestrator');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -82,6 +84,33 @@ const routesMatrixLimiter = makeLimiter({
   message: { error: 'Too many route matrix requests from this IP, please try again after 15 minutes.' }
 });
 
+const plansCreateLimiter = makeLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many planning requests from this IP, please try again after 15 minutes.' }
+});
+
+// Live requests require a unique client retry key. Store only a request digest,
+// never Google response content. This process-local guard complements rate limits.
+const planningAttempts = new Map();
+function planningReplayGuard(req, res, next) {
+  if (process.env.ROVE_PLACES_MODE !== 'live' && process.env.ROVE_ROUTES_MODE !== 'live') return next();
+  const key = req.get('Idempotency-Key');
+  if (!key || !/^[A-Za-z0-9_-]{8,64}$/.test(key)) return next(invalid('Idempotency-Key'));
+  const now = Date.now();
+  for (const [id, record] of planningAttempts) if (record.expires <= now) planningAttempts.delete(id);
+  if (planningAttempts.size >= 1000) planningAttempts.delete(planningAttempts.keys().next().value);
+  const id = createHash('sha256').update(`${req.ip}\0${key}`).digest('hex');
+  const digest = createHash('sha256').update(JSON.stringify(req.body)).digest('hex');
+  const prior = planningAttempts.get(id);
+  if (prior) return next(new HttpError(409, prior.digest === digest ? 'REQUEST_ALREADY_ATTEMPTED' :
+    'IDEMPOTENCY_CONFLICT', 'Planning request key was already used'));
+  planningAttempts.set(id, { digest, expires: now + 15 * 60 * 1000 });
+  next();
+}
+
 const plansLimiter = makeLimiter({
   windowMs: 15 * 60 * 1000,
   limit: 20,
@@ -146,6 +175,12 @@ app.post('/api/routes/matrix', routesMatrixLimiter, route(async (req, res, conte
   res.set('Cache-Control', 'no-store');
   res.json(await computeRouteMatrix(req.body, { context }));
 }, 1));
+
+app.post('/api/plans/create', plansCreateLimiter, planningReplayGuard, route(async (req, res, context) => {
+  res.set('Cache-Control', 'no-store');
+  const result = await createPlan(req.body, { context });
+  res.status(result.httpStatus ?? 200).json(result);
+}, 2));
 
 // --- PHOTO PROXY ENDPOINT ---
 app.get('/api/photo', photoLimiter, route(async (req, res, context) => {
