@@ -125,7 +125,7 @@ function prepare(input) {
     const candidate = { id: text(raw.id, `${field}.id`, 80), name: text(raw.name, `${field}.name`, 120),
       latitude: coordinate(raw.latitude, `${field}.latitude`, 90), longitude: coordinate(raw.longitude, `${field}.longitude`, 180),
       category: text(raw.category, `${field}.category`, 60), tags: strings(raw.tags, `${field}.tags`, 12),
-      visitMinutes: int(raw.visitMinutes, `${field}.visitMinutes`, 15, 360),
+      visitMinutes: raw.visitMinutes === null ? null : int(raw.visitMinutes, `${field}.visitMinutes`, 15, 360),
       opening: opening(raw.opening, `${field}.opening`),
       source: metadata(raw.source, `${field}.source`),
       relevanceScore: raw.relevanceScore === undefined ? 50 : int(raw.relevanceScore, `${field}.relevanceScore`, 0, 100),
@@ -203,12 +203,14 @@ function scorePlan(stops, travelMinutes, end, budget, preferences, weights) {
 
 function generateItineraries(input) {
   const { preferences: p, weights, candidates, routes } = prepare(input);
-  const eligible = candidates.filter(candidate => !p.excludedPlaceIds.includes(candidate.id) &&
+  const selected = candidates.filter(candidate => !p.excludedPlaceIds.includes(candidate.id) &&
     (!p.categories.length || p.categories.includes(candidate.category)));
+  const eligible = selected.filter(candidate => candidate.visitMinutes !== null);
   const route = (from, to) => routes.get(`${from}\u0000${to}\u0000${p.transportMode}`);
   const endLimit = p.start + p.availableMinutes * 60000;
   const plans = [];
-  const issues = { missingRoute: 0, closed: 0, timeExceeded: 0, travelLimit: 0, budgetExceeded: 0, excluded: candidates.length - eligible.length };
+  const issues = { missingRoute: 0, closed: 0, timeExceeded: 0, travelLimit: 0, budgetExceeded: 0,
+    unknownDuration: selected.length - eligible.length, excluded: candidates.length - selected.length };
   let expansions = 0;
   let limitReached = false;
   const pushPlan = state => {

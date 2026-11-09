@@ -110,6 +110,12 @@ describe('deterministic itinerary engine', () => {
       preferences: { maxTravelMinutesPerLeg: 30 } })).search.issues.travelLimit).toBe(1);
   });
 
+  test('unknown visit duration stays explicit and cannot be scheduled', () => {
+    const result = generateItineraries(requestBody({ candidates: [place('a', { visitMinutes: null })] }));
+    expect(result).toMatchObject({ status: 'no_feasible_plan', plans: [],
+      search: { issues: { unknownDuration: 1 } } });
+  });
+
   test('closed upon arrival and closing before visit completion are rejected', () => {
     const closed = place('a', { opening: { status: 'known', windows: [{ opensAt: '2026-01-01T06:00:00+05:30',
       closesAt: '2026-01-01T09:00:00+05:30' }] } });

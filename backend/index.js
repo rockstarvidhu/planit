@@ -9,6 +9,7 @@ const { LIMITS, HttpError, invalid, unavailable, numeric, bodyObject, proxyTrust
   safeLog, route, googleJSON, photoImage } = require('./security');
 const { evaluateBudget, BudgetInputError } = require('./budget-engine');
 const { generateItineraries, ItineraryInputError } = require('./itinerary-engine');
+const { discoverPlaces } = require('./providers/google-places');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -62,6 +63,14 @@ const budgetLimiter = makeLimiter({
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { error: 'Too many budget requests from this IP, please try again after 15 minutes.' }
+});
+
+const placesDiscoveryLimiter = makeLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many place discovery requests from this IP, please try again after 15 minutes.' }
 });
 
 const plansLimiter = makeLimiter({
@@ -118,6 +127,11 @@ app.post('/api/plans/generate', plansLimiter, route((req, res) => {
     throw error;
   }
 }, 0));
+
+app.post('/api/places/discover', placesDiscoveryLimiter, route(async (req, res, context) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(await discoverPlaces(req.body, { context }));
+}, 1));
 
 // --- PHOTO PROXY ENDPOINT ---
 app.get('/api/photo', photoLimiter, route(async (req, res, context) => {

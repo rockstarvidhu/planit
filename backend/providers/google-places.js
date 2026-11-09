@@ -1,0 +1,238 @@
+const axios = require('axios');
+const { HttpError, invalid, numeric, bodyObject, providerError, LIMITS } = require('../security');
+
+const URL = 'https://places.googleapis.com/v1/places:searchNearby';
+const MAX_RESULTS = 12;
+const MAX_RADIUS = 10000;
+const BASE_FIELDS = 'places.id,places.displayName,places.location,places.primaryType,places.types,places.businessStatus,places.attributions';
+const HOURS_FIELDS = ',places.timeZone,places.currentOpeningHours';
+const CATEGORY_TYPES = Object.freeze({
+  Cafe: ['cafe', 'coffee_shop', 'tea_store'],
+  Food: ['restaurant', 'food_court'],
+  Movies: ['movie_theater'],
+  Outdoors: ['park', 'botanical_garden', 'garden', 'hiking_area', 'national_park'],
+  Entertainment: ['amusement_park', 'museum', 'bowling_alley', 'video_arcade', 'art_gallery'],
+  Shopping: ['shopping_mall', 'market', 'book_store'],
+});
+const TYPE_CATEGORY = Object.fromEntries(Object.entries(CATEGORY_TYPES).flatMap(([category, types]) => types.map(type => [type, category])));
+const EXCLUDED_PRIMARY_TYPES = new Set(['school', 'hospital', 'bank', 'gas_station', 'corporate_office', 'airport']);
+const FIXTURE_RESPONSE = Object.freeze({ places: [{
+  id: 'fixture-cafe-1', displayName: { text: 'Fictional Test Café' },
+  location: { latitude: 12.97, longitude: 77.59 }, primaryType: 'cafe', types: ['cafe'],
+  businessStatus: 'OPERATIONAL', attributions: [],
+}] });
+
+const serviceError = (status, code, message) => new HttpError(status, code, message);
+const validText = (value, max = 120) => typeof value === 'string' && value.trim().length > 0 && value.length <= max &&
+  !Array.from(value).some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
+const timeText = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
+  Number.isFinite(Date.parse(value));
+
+function validateInput(body) {
+  const request = bodyObject(body);
+  const latitude = numeric(request.latitude, 'latitude', -90, 90);
+  const longitude = numeric(request.longitude, 'longitude', -180, 180);
+  const radiusMeters = numeric(request.radiusMeters, 'radiusMeters (100–10000)', 100, MAX_RADIUS, { integer: true });
+  const limit = numeric(request.limit, 'limit (1–12)', 1, MAX_RESULTS, { integer: true, fallback: 8 });
+  if (!Array.isArray(request.categories) || request.categories.length < 1 || request.categories.length > 3 ||
+      request.categories.some(category => typeof category !== 'string' || !CATEGORY_TYPES[category]) ||
+      new Set(request.categories).size !== request.categories.length) throw invalid('categories');
+  if (request.includeOpeningHours !== undefined && typeof request.includeOpeningHours !== 'boolean') throw invalid('includeOpeningHours');
+  const includeOpeningHours = request.includeOpeningHours === true;
+  if (request.plannedAt !== undefined && !timeText(request.plannedAt)) throw invalid('plannedAt');
+  if (includeOpeningHours && !request.plannedAt) throw invalid('plannedAt');
+  return { latitude, longitude, radiusMeters, limit, categories: [...request.categories],
+    includeOpeningHours, plannedAt: request.plannedAt ?? null };
+}
+
+function zoneParts(time, formatter) {
+  const parts = Object.fromEntries(formatter.formatToParts(time).filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
+  return { year: parts.year, month: parts.month, day: parts.day, hour: parts.hour, minute: parts.minute };
+}
+
+function formatterFor(zone) {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit',
+      day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  } catch { return null; }
+}
+
+function localEpoch(point, formatter) {
+  if (!point || !point.date || typeof point.date !== 'object') return null;
+  const { year, month, day } = point.date;
+  const { hour, minute } = point;
+  if (![year, month, day, hour, minute].every(Number.isInteger) || year < 2000 || year > 2100 ||
+      hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  const local = Date.UTC(year, month - 1, day, hour, minute);
+  const date = new Date(local);
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  const target = { year, month, day, hour, minute };
+  const possible = new Set();
+  for (const sample of [local - 86400000, local, local + 86400000]) {
+    const zoned = zoneParts(sample, formatter);
+    const offset = Date.UTC(zoned.year, zoned.month - 1, zoned.day, zoned.hour, zoned.minute) - sample;
+    const epoch = local - offset;
+    const actual = zoneParts(epoch, formatter);
+    if (Object.keys(target).every(key => actual[key] === target[key])) possible.add(epoch);
+  }
+  // Ambiguous fall-back or nonexistent spring-forward local times remain unknown.
+  return possible.size === 1 ? [...possible][0] : null;
+}
+
+function openingData(place, plannedAt, fetchedAt) {
+  if (!plannedAt) return { opening: { status: 'unknown' }, reason: 'HOURS_NOT_REQUESTED' };
+  const zone = place.timeZone?.id;
+  const formatter = typeof zone === 'string' ? formatterFor(zone) : null;
+  const hours = place.currentOpeningHours;
+  if (!formatter || !hours || !Array.isArray(hours.periods) || hours.periods.length === 0) {
+    return { opening: { status: 'unknown' }, reason: 'HOURS_UNAVAILABLE' };
+  }
+  const planned = zoneParts(Date.parse(plannedAt), formatter);
+  const current = zoneParts(fetchedAt, formatter);
+  const dayDifference = (Date.UTC(planned.year, planned.month - 1, planned.day) -
+    Date.UTC(current.year, current.month - 1, current.day)) / 86400000;
+  if (dayDifference < 0 || dayDifference > 6) return { opening: { status: 'unknown' }, reason: 'HOURS_OUTSIDE_CURRENT_WINDOW' };
+  if (hours.periods.length > 14) return { opening: { status: 'unknown' }, reason: 'HOURS_UNUSABLE' };
+  const windows = [];
+  for (const period of hours.periods) {
+    const opens = localEpoch(period?.open, formatter);
+    const closes = localEpoch(period?.close, formatter);
+    if (opens === null || closes === null || closes <= opens || closes - opens > 48 * 3600000) {
+      return { opening: { status: 'unknown' }, reason: 'HOURS_UNUSABLE' };
+    }
+    windows.push({ opensAt: new Date(opens).toISOString(), closesAt: new Date(closes).toISOString() });
+  }
+  windows.sort((a, b) => a.opensAt.localeCompare(b.opensAt));
+  for (let i = 1; i < windows.length; i++) if (windows[i].opensAt < windows[i - 1].closesAt) {
+    return { opening: { status: 'unknown' }, reason: 'HOURS_UNUSABLE' };
+  }
+  return { opening: { status: 'known', windows }, confidence: 'provider_current_hours' };
+}
+
+function attributionData(raw, google) {
+  if (!google) return { googleMapsRequired: false, thirdParty: [] };
+  const thirdParty = Array.isArray(raw) ? raw.slice(0, 8).filter(item => item && validText(item.provider, 120)).map(item => {
+    let uri;
+    try {
+      const parsed = new URL(item.providerUri);
+      if (parsed.protocol === 'https:' && !parsed.username && !parsed.password) uri = parsed.toString();
+    } catch { /* Text attribution remains available without an unsafe link. */ }
+    return { provider: item.provider, ...(uri ? { providerUri: uri } : {}) };
+  }) : [];
+  return { googleMapsRequired: true, thirdParty };
+}
+
+function normalizePlace(place, input, sourceKind, fetchedAt) {
+  if (!place || typeof place !== 'object' || !validText(place.id, 80) ||
+      !validText(place.displayName?.text, 120) ||
+      typeof place.location?.latitude !== 'number' || !Number.isFinite(place.location.latitude) ||
+      Math.abs(place.location.latitude) > 90 || typeof place.location?.longitude !== 'number' ||
+      !Number.isFinite(place.location.longitude) || Math.abs(place.location.longitude) > 180) return { reason: 'MALFORMED_PLACE' };
+  if (place.businessStatus && !['OPERATIONAL', 'CLOSED_TEMPORARILY', 'CLOSED_PERMANENTLY', 'FUTURE_OPENING'].includes(place.businessStatus)) {
+    return { reason: 'MALFORMED_PLACE' };
+  }
+  if (place.businessStatus && place.businessStatus !== 'OPERATIONAL') return { reason: 'CLOSED_BUSINESS' };
+  if (EXCLUDED_PRIMARY_TYPES.has(place.primaryType)) return { reason: 'IRRELEVANT_TYPE' };
+  const types = [place.primaryType, ...(Array.isArray(place.types) ? place.types : [])];
+  const category = types.map(type => TYPE_CATEGORY[type]).find(Boolean);
+  if (!category || !input.categories.includes(category)) return { reason: 'IRRELEVANT_TYPE' };
+  const hours = input.includeOpeningHours ? openingData(place, input.plannedAt, fetchedAt) :
+    { opening: { status: 'unknown' }, reason: 'HOURS_NOT_REQUESTED' };
+  const warnings = [{ code: 'PRICE_UNKNOWN', placeId: place.id }, { code: 'VISIT_DURATION_UNKNOWN', placeId: place.id }];
+  if (hours.reason) warnings.push({ code: hours.reason, placeId: place.id });
+  if (!place.businessStatus) warnings.push({ code: 'BUSINESS_STATUS_UNKNOWN', placeId: place.id });
+  const google = sourceKind === 'google_places_new';
+  const candidate = {
+    id: place.id, name: place.displayName.text, latitude: place.location.latitude,
+    longitude: place.location.longitude, category, tags: [], visitMinutes: null,
+    opening: hours.opening,
+    expenses: [{ id: 'activity-cost', category: 'activity', quantity: 1, unit: 'group',
+      priceStatus: 'unknown', minimumCost: null, expectedCost: null, maximumCost: null }],
+    source: { name: google ? 'Google Places (New)' : 'Rove fictional fixture', reference: place.id },
+    provenance: { provider: sourceKind, fetchedAt: new Date(fetchedAt).toISOString(),
+      placeId: place.id, openingConfidence: hours.confidence ?? 'unknown', priceDataStatus: 'unknown' },
+    businessStatus: place.businessStatus ?? 'UNKNOWN',
+    attribution: attributionData(place.attributions, google),
+  };
+  return { candidate, warnings };
+}
+
+async function discoverPlaces(body, options = {}) {
+  const input = validateInput(body);
+  const mode = options.mode ?? process.env.ROVE_PLACES_MODE ?? 'disabled';
+  const fetchedAt = options.now ?? Date.now();
+  if (!Number.isFinite(fetchedAt)) throw serviceError(500, 'INTERNAL_ERROR', 'Internal server error');
+  let data;
+  let sourceKind;
+  if (mode === 'fixture') {
+    if ((options.nodeEnv ?? process.env.NODE_ENV) === 'production') throw serviceError(503, 'PLACES_DISABLED', 'Place discovery is not enabled');
+    data = options.fixtureResponse ?? FIXTURE_RESPONSE;
+    sourceKind = 'rove_fixture';
+  } else if (mode === 'live') {
+    if ((options.liveEnabled ?? process.env.ROVE_PLACES_LIVE_ENABLED) !== true &&
+        (options.liveEnabled ?? process.env.ROVE_PLACES_LIVE_ENABLED) !== 'true') {
+      throw serviceError(503, 'PLACES_DISABLED', 'Place discovery is not enabled');
+    }
+    if (input.includeOpeningHours && (options.enterpriseEnabled ?? process.env.ROVE_PLACES_ENTERPRISE_FIELDS_ENABLED) !== true &&
+        (options.enterpriseEnabled ?? process.env.ROVE_PLACES_ENTERPRISE_FIELDS_ENABLED) !== 'true') {
+      throw serviceError(503, 'PLACES_HOURS_DISABLED', 'Opening-hours lookup is not enabled');
+    }
+    const key = options.apiKey ?? process.env.GOOGLE_API_KEY;
+    if (!key) throw serviceError(503, 'SERVICE_UNCONFIGURED', 'Google Places service is not configured');
+    if (!options.context || typeof options.context.run !== 'function') throw serviceError(500, 'INTERNAL_ERROR', 'Internal server error');
+    const includedTypes = [...new Set(input.categories.flatMap(category => CATEGORY_TYPES[category]))];
+    const fieldMask = BASE_FIELDS + (input.includeOpeningHours ? HOURS_FIELDS : '');
+    const payload = { includedTypes, maxResultCount: input.limit, rankPreference: 'DISTANCE',
+      locationRestriction: { circle: { center: { latitude: input.latitude, longitude: input.longitude },
+        radius: input.radiusMeters } } };
+    try {
+      const response = await options.context.run(signal => (options.transport ?? axios).post(URL, payload, {
+        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': fieldMask },
+        signal, timeout: LIMITS.providerMs, maxRedirects: 0,
+        maxContentLength: LIMITS.jsonBytes, maxBodyLength: LIMITS.jsonBytes,
+      }));
+      if (response.status !== 200) throw { response: { status: response.status } };
+      options.context.check();
+      data = response.data;
+    } catch (error) { throw providerError(error, options.context.signal); }
+    sourceKind = 'google_places_new';
+  } else if (mode === 'disabled') {
+    throw serviceError(503, 'PLACES_DISABLED', 'Place discovery is not enabled');
+  } else {
+    throw serviceError(503, 'SERVICE_UNCONFIGURED', 'Place discovery is not configured');
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data) || data.error !== undefined ||
+      (data.places === undefined && Object.keys(data).length !== 0) ||
+      (data.places !== undefined && !Array.isArray(data.places)) || (data.places?.length ?? 0) > 20) {
+    throw serviceError(502, 'PROVIDER_INVALID_RESPONSE', 'Place provider returned invalid data');
+  }
+  const places = data.places ?? [];
+  const candidates = [];
+  const warnings = sourceKind === 'rove_fixture' ? [{ code: 'FICTIONAL_FIXTURE_DATA' }] : [];
+  const skipped = { malformed: 0, closed: 0, irrelevant: 0, duplicate: 0 };
+  const seen = new Set();
+  for (const place of places) {
+    const result = normalizePlace(place, input, sourceKind, fetchedAt);
+    if (!result.candidate) {
+      if (result.reason === 'MALFORMED_PLACE') skipped.malformed++;
+      else if (result.reason === 'CLOSED_BUSINESS') skipped.closed++;
+      else skipped.irrelevant++;
+      continue;
+    }
+    if (seen.has(result.candidate.id)) { skipped.duplicate++; continue; }
+    seen.add(result.candidate.id);
+    candidates.push(result.candidate);
+    warnings.push(...result.warnings);
+    if (candidates.length >= input.limit) break;
+  }
+  if (places.length && skipped.malformed === places.length) {
+    throw serviceError(502, 'PROVIDER_INVALID_RESPONSE', 'Place provider returned invalid data');
+  }
+  for (const [kind, count] of Object.entries(skipped)) if (count) warnings.push({ code: `SKIPPED_${kind.toUpperCase()}`, count });
+  return { status: 'ok', provider: sourceKind, candidates,
+    attribution: { googleMapsRequired: sourceKind === 'google_places_new' },
+    warnings, skipped };
+}
+
+module.exports = { discoverPlaces, validateInput, normalizePlace, openingData, CATEGORY_TYPES,
+  BASE_FIELDS, HOURS_FIELDS, URL };

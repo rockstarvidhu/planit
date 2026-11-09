@@ -56,7 +56,7 @@ returning outing requires `returnToStart: true` and a route from its final
 stop to `origin`. The plan ends at the last venue when return is false.
 
 Candidates require unique stable IDs, name, coordinates, category, visit
-duration (15–360 minutes), opening data, expenses and source metadata. Tags and
+duration (15–360 minutes) or `null` when genuinely unknown, opening data, expenses and source metadata. A candidate with unknown duration validates but is excluded from scheduling and counted in `search.issues.unknownDuration`. Tags and
 relevance score (0–100, default 50) are optional. A candidate must lie within
 100 km straight-line distance of the origin; this is a **locality filter only**,
 never a travel-time estimate. Each candidate has at most five Budget Engine
@@ -66,8 +66,8 @@ Opening hours are either `{ "status": "unknown" }` or `known` with up to 14
 nonoverlapping absolute windows. Every timestamp must include `Z` or a numeric
 UTC offset. An overnight window uses timestamps on different dates. Different
 offsets across a daylight-saving boundary represent the actual elapsed time.
-The future Places adapter must materialize venue-local weekly hours into these
-dated windows; this engine does not infer a time zone from coordinates.
+The Places (New) adapter materializes provider current hours into these dated
+windows only when reliable; this engine does not infer a time zone from coordinates.
 Unknown hours permit a plan only with `UNKNOWN_OPENING_HOURS` warning.
 When the venue opens later, the engine waits at most `maxWaitMinutes` and counts
 the wait against the available duration. Arrival, the entire visit, and any
