@@ -5,7 +5,7 @@ import { HandoffIcon } from '../../components/HandoffIcon';
 import type { HandoffIconName } from '../../components/HandoffIcon';
 import { fonts, useRoveTheme } from '../../design/theme';
 function TabIcon({name,color,focused}:{name:HandoffIconName;color:ColorValue;focused:boolean}){
-  const {colors}=useRoveTheme();return <View style={{width:30,height:30,borderRadius:15,backgroundColor:focused?colors.accent:'transparent',alignItems:'center',justifyContent:'center'}}><HandoffIcon name={name} color={focused?colors.buttonText:String(color)} size={21}/></View>;
+  const {colors}=useRoveTheme();return <View style={{width:42,height:34,borderRadius:17,backgroundColor:focused?colors.chip:'transparent',alignItems:'center',justifyContent:'center'}}><HandoffIcon name={name} color={focused?colors.accent:String(color)} size={21}/></View>;
 }
 export default function TabLayout(){
   const {colors}=useRoveTheme();

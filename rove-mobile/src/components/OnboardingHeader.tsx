@@ -1,9 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { OnboardingProgress } from './OnboardingProgress';
-import { fonts, useRoveTheme } from '../design/theme';
+import { fonts, palettes } from '../design/theme';
 
 export function OnboardingHeader({ current, onBack, onSkip }: { current: 1 | 2; onBack: () => void; onSkip: () => void }) {
-  const { colors } = useRoveTheme();
+  const colors = palettes.light;
   return <>
     <View style={styles.row}>
       <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} style={styles.back}>

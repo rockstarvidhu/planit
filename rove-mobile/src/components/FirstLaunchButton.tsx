@@ -1,12 +1,12 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { HandoffIcon } from './HandoffIcon';
 import type { HandoffIconName } from './HandoffIcon';
-import { fonts, useRoveTheme } from '../design/theme';
+import { fonts, palettes } from '../design/theme';
 
 export function FirstLaunchButton({ label, onPress, secondary = false, disabled = false, arrow = false, leadingIcon }: {
   label: string; onPress: () => void; secondary?: boolean; disabled?: boolean; arrow?: boolean; leadingIcon?: HandoffIconName;
 }) {
-  const { colors } = useRoveTheme();
+  const colors = palettes.light;
   const foreground = secondary ? colors.accent : colors.buttonText;
   return <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={onPress}
     style={[styles.button, { backgroundColor: secondary ? 'transparent' : colors.accent, borderColor: colors.accent, opacity: disabled ? 0.5 : 1 }]}>

@@ -6,12 +6,12 @@ import { onboardingArt } from '../../assets/onboardingArt';
 import { FirstLaunchButton } from '../../components/FirstLaunchButton';
 import { FirstLaunchScreen } from '../../components/FirstLaunchScreen';
 import { OnboardingHeader } from '../../components/OnboardingHeader';
-import { fonts, useRoveTheme } from '../../design/theme';
+import { fonts, palettes } from '../../design/theme';
 import { demoAreas, useDiscovery } from '../../state/DiscoveryContext';
 
 export default function OnboardingLocation() {
   const { location, setLocation, setStep } = useDiscovery();
-  const { colors, mode } = useRoveTheme();
+  const colors = palettes.light;
   const { width, height } = useWindowDimensions();
   const [manual, setManual] = useState(false);
   const [query, setQuery] = useState('');
@@ -30,7 +30,8 @@ export default function OnboardingLocation() {
       const found = places[0];
       const label = [found?.city || found?.subregion, found?.region].filter(Boolean).join(', ');
       if (!label) { setMessage('We could not name your area. Choose a demo area or skip for now.'); return; }
-      setLocation({ kind: 'device', id: `device:${label.toLowerCase()}`, label }); next();
+      setLocation({ kind: 'device', id: `device:${label.toLowerCase()}`, label,
+        coordinates: { latitude: position.coords.latitude, longitude: position.coords.longitude } }); next();
     } catch { setMessage('Location is unavailable right now. Choose a demo area or skip for now.'); }
     finally { setBusy(false); }
   };
@@ -42,7 +43,7 @@ export default function OnboardingLocation() {
     <View style={styles.main}>
     <Text style={[styles.title, { color: colors.text, marginTop: compact ? 16 : 22 }]}>Where are you planning a day out?</Text>
     <Text style={[styles.body, { color: colors.text }]}>Share your location so we can find the best places around you.</Text>
-    <Image source={onboardingArt.location[mode]} resizeMode="contain" style={[styles.art, { width: artWidth, height: artWidth * 1130 / 1582 }]} accessibilityLabel="Rove explorer holding a map" />
+    <Image source={onboardingArt.location.light} resizeMode="contain" style={[styles.art, { width: artWidth, height: artWidth * 1130 / 1582 }]} accessibilityLabel="Rove explorer holding a map" />
     <View style={styles.actions}>
       <FirstLaunchButton label={busy ? 'Finding your area…' : 'Use my current location'} leadingIcon="map-pin" onPress={useDevice} disabled={busy} />
       {busy && <ActivityIndicator color={colors.accent} />}

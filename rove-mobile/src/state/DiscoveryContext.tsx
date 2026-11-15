@@ -8,7 +8,7 @@ export const ONBOARDING_VERSION = 1;
 export type BudgetMode = 'total' | 'perPerson';
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type DurationPreset = '2–3 hours' | '4–6 hours' | 'Full day' | null;
-export type SelectedLocation = { kind: 'demo' | 'device'; id: string; label: string };
+export type SelectedLocation = { kind: 'demo' | 'device'; id: string; label: string; coordinates?: { latitude: number; longitude: number } };
 export type OnboardingStep = 'welcome' | 'location' | 'preferences';
 
 type Persisted = {
@@ -30,7 +30,9 @@ export function parseStoredPreferences(raw: string | null): Persisted {
     return {
       completedVersion: data.completedVersion === ONBOARDING_VERSION ? ONBOARDING_VERSION : 0,
       step: data.step === 'location' || data.step === 'preferences' ? data.step : 'welcome',
-      location: location && (location.kind === 'demo' || location.kind === 'device') && typeof location.id === 'string' && typeof location.label === 'string' && location.label.length <= 100 ? location : null,
+      location: location && (location.kind === 'demo' || location.kind === 'device') && typeof location.id === 'string' && typeof location.label === 'string' && location.label.length <= 100 ? {
+        kind: location.kind, id: location.id, label: location.label,
+      } : null,
       budgetAmount: typeof data.budgetAmount === 'number' && Number.isInteger(data.budgetAmount) && data.budgetAmount >= 100 && data.budgetAmount <= 1000000 ? data.budgetAmount : defaults.budgetAmount,
       budgetMode: data.budgetMode === 'perPerson' ? 'perPerson' : 'total',
       people: typeof data.people === 'number' && Number.isInteger(data.people) && data.people >= 1 && data.people <= 20 ? data.people : defaults.people,
@@ -86,6 +88,11 @@ type DiscoveryState = {
 };
 const Context = createContext<DiscoveryState | null>(null);
 
+function forStorage(preferences: Persisted): Persisted {
+  const location = preferences.location;
+  return { ...preferences, location: location ? { kind: location.kind, id: location.id, label: location.label } : null };
+}
+
 export function DiscoveryProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [preferences, setPreferences] = useState<Persisted>(defaults);
@@ -96,11 +103,11 @@ export function DiscoveryProvider({ children }: { children: ReactNode }) {
   useEffect(() => { let active = true; AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
     if (active) { setPreferences(parseStoredPreferences(raw)); setReady(true); }
   }).catch(() => { if (active) setReady(true); }); return () => { active = false; }; }, []);
-  useEffect(() => { if (ready) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(preferences)).catch(() => {}); }, [ready, preferences]);
+  useEffect(() => { if (ready) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(forStorage(preferences))).catch(() => {}); }, [ready, preferences]);
   const update = useCallback((patch: Partial<Persisted>) => setPreferences((current) => ({ ...current, ...patch })), []);
   const completeOnboarding = useCallback(async () => {
     const next = { ...preferences, completedVersion: ONBOARDING_VERSION };
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(forStorage(next))).catch(() => {});
     setPreferences(next);
   }, [preferences]);
   const toggleSaved = useCallback((id: string) => setSavedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]), []);

@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
-import { useRoveTheme } from '../design/theme';
+import { palettes } from '../design/theme';
 export function OnboardingProgress({ current }: { current: 1 | 2 }) {
-  const { colors } = useRoveTheme();
+  const colors = palettes.light;
   return <View accessibilityLabel={`Setup step ${current} of 2`} style={styles.row}>
     {[1,2].map((step) => <View key={step} style={[styles.bar,{ backgroundColor: step <= current ? colors.accent : colors.border }]} />)}
   </View>;

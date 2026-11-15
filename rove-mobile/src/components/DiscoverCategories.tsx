@@ -16,9 +16,9 @@ export function DiscoverCategories({ selected, onSelect }: { selected: DiscoverC
   return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scroll} contentContainerStyle={styles.row}>
     {categories.map(({ name, icon }) => <Pressable key={name} accessibilityRole="button" accessibilityLabel={`${name} category`}
       accessibilityState={{ selected: selected === name }} onPress={() => onSelect(name)}
-      style={[styles.chip, { backgroundColor: selected === name ? colors.accent : colors.background, borderColor: colors.accent }]}>
-      <HandoffIcon name={icon} color={selected === name ? colors.buttonText : colors.accent} size={20} />
-      <Text style={[styles.label, { color: selected === name ? colors.buttonText : colors.text }]}>{name}</Text>
+      style={[styles.chip, { backgroundColor: selected === name ? '#244A39' : colors.background, borderColor: selected === name ? '#244A39' : colors.border }]}>
+      <HandoffIcon name={icon} color={selected === name ? '#F6F3EB' : colors.accent} size={18} />
+      <Text style={[styles.label, { color: selected === name ? '#F6F3EB' : colors.text }]}>{name}</Text>
     </Pressable>)}
   </ScrollView>;
 }
@@ -26,6 +26,6 @@ export function DiscoverCategories({ selected, onSelect }: { selected: DiscoverC
 const styles = StyleSheet.create({
   scroll: { marginHorizontal: -22 },
   row: { paddingHorizontal: 22, gap: 8, alignItems: 'center' },
-  chip: { minHeight: 46, borderWidth: 1, borderRadius: 25, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 13 },
+  chip: { minHeight: 44, borderWidth: 1, borderRadius: 25, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 13 },
   label: { fontFamily: fonts.medium, fontSize: 13 },
 });

@@ -7,14 +7,14 @@ import { FirstLaunchButton } from '../../components/FirstLaunchButton';
 import { FirstLaunchScreen } from '../../components/FirstLaunchScreen';
 import { OnboardingHeader } from '../../components/OnboardingHeader';
 import { formatRupees } from '../../components/BudgetControls';
-import { fonts, useRoveTheme } from '../../design/theme';
+import { fonts, palettes } from '../../design/theme';
 import { parseBudget, totalBudget, useDiscovery } from '../../state/DiscoveryContext';
 
 const presets = [500, 1000, 2000] as const;
 
 export default function Preferences() {
   const { budgetAmount, setBudgetAmount, budgetMode, setBudgetMode, people, setPeople, setStep, completeOnboarding } = useDiscovery();
-  const { colors, mode } = useRoveTheme();
+  const colors = palettes.light;
   const { width, height } = useWindowDimensions();
   const [draft, setDraft] = useState(formatRupees(budgetAmount));
   const input = useRef<ComponentRef<typeof TextInput>>(null);
@@ -30,7 +30,7 @@ export default function Preferences() {
     <OnboardingHeader current={2} onBack={back} onSkip={finish} />
     <Text style={[styles.title, { color: colors.text, marginTop: compact ? 19 : 24 }]}>What’s your plan for today?</Text>
     <Text style={[styles.body, { color: colors.text }]}>Tell us your budget and we’ll curate the best options for you.</Text>
-    <Image source={onboardingArt.budget[mode]} resizeMode="contain" style={[styles.art, { width: artWidth, height: artWidth * 1110 / 1582 }]} accessibilityLabel="Rove explorer holding a wallet" />
+    <Image source={onboardingArt.budget.light} resizeMode="contain" style={[styles.art, { width: artWidth, height: artWidth * 1110 / 1582 }]} accessibilityLabel="Rove explorer holding a wallet" />
     <Text style={[styles.label, { color: colors.text }]}>Your budget (for the day)</Text>
     <View style={[styles.amountRow, { borderColor: colors.accent, backgroundColor: colors.surface }]}>
       <Pressable accessibilityRole="button" accessibilityLabel="Decrease budget by 500 rupees" onPress={() => adjustAmount(-500)} style={styles.adjust}><Text style={[styles.adjustText, { color: colors.accent }]}>−</Text></Pressable>

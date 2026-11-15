@@ -24,8 +24,8 @@
           "imageWidth": 300,
           "resizeMode": "contain",
           "dark": {
-            "backgroundColor": "#080908",
-            "image": "./design-handoff/ROVE_Complete_First_Launch_Assets_v2/splash/native/native-wordmark-dark-1024.png"
+            "backgroundColor": "#F6F3EB",
+            "image": "./design-handoff/ROVE_Complete_First_Launch_Assets_v2/splash/native/native-wordmark-light-1024.png"
           }
         }
       ]

@@ -4,12 +4,12 @@ import { onboardingArt } from '../assets/onboardingArt';
 import { BrandWordmark } from '../components/BrandWordmark';
 import { FirstLaunchButton } from '../components/FirstLaunchButton';
 import { FirstLaunchScreen } from '../components/FirstLaunchScreen';
-import { fonts, useRoveTheme } from '../design/theme';
+import { fonts, palettes } from '../design/theme';
 import { useDiscovery } from '../state/DiscoveryContext';
 
 export default function Welcome() {
   const { setStep, completeOnboarding } = useDiscovery();
-  const { colors, mode } = useRoveTheme();
+  const colors = palettes.light;
   const { width } = useWindowDimensions();
   const artWidth = Math.min(width - 44, 370);
   const artHeight = artWidth * 1110 / 1580;
@@ -18,9 +18,9 @@ export default function Welcome() {
   return <FirstLaunchScreen contentStyle={styles.centered}>
     <View style={styles.heading}>
       <Text style={[styles.hello, { color: colors.text }]}>Hi, I’m</Text>
-      <BrandWordmark width={Math.min(artWidth * 0.62, 225)} color={mode === 'dark' ? colors.text : '#244A39'} />
+      <BrandWordmark width={Math.min(artWidth * 0.62, 225)} color={colors.accent} />
     </View>
-    <Image source={onboardingArt.welcome[mode]} resizeMode="contain" style={[styles.art, { width: artWidth, height: artHeight }]} accessibilityLabel="Rove waving hello" />
+    <Image source={onboardingArt.welcome.light} resizeMode="contain" style={[styles.art, { width: artWidth, height: artHeight }]} accessibilityLabel="Rove waving hello" />
     <View style={styles.copy}>
       <Text style={[styles.title, { color: colors.text }]}>Your local outing companion.</Text>
       <Text style={[styles.body, { color: colors.text }]}>Discover places, get personalized plans and make the most of your day.</Text>

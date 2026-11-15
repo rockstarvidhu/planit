@@ -14,6 +14,9 @@ export const palettes = {
 
 export const fonts = {
   display: 'DMSerifDisplay_400Regular',
+  editorialSemibold: 'PlusJakartaSans_600SemiBold',
+  editorialBold: 'PlusJakartaSans_700Bold',
+  editorialExtraBold: 'PlusJakartaSans_800ExtraBold',
   body: 'Inter_400Regular',
   medium: 'Inter_500Medium',
   semibold: 'Inter_600SemiBold',

@@ -2,7 +2,9 @@ import { readApiConfiguration } from '../config/api.ts';
 import type {
   ItineraryRequest, ItineraryResponse, ReverseGeocodeRequest, ReverseGeocodeResponse,
   ApiErrorResponse,
+  PlanCreateRequest, PlanCreateResponse,
 } from '../types/api.ts';
+import { parsePlanningResponse } from './planningResponse.ts';
 
 export type ApiErrorKind = 'configuration' | 'invalid_request' | 'forbidden' | 'not_found' |
   'rate_limited' | 'upstream' | 'timeout' | 'cancelled' | 'network' | 'unexpected';
@@ -40,6 +42,7 @@ function classifyResponse(status: number, code?: string, retryAfter?: string | n
   if (status === 400 || status === 413) return new ApiClientError('invalid_request', 'Check the request details.', status, safeCode);
   if (status === 403) return new ApiClientError('forbidden', 'This request is not permitted.', status, safeCode);
   if (status === 404) return new ApiClientError('not_found', 'No matching result was found.', status, safeCode);
+  if (status === 409) return new ApiClientError('unexpected', 'This planning attempt was already received. Start a new search to try again.', status, safeCode);
   if (status === 429) return new ApiClientError('rate_limited', 'Too many requests. Try again later.', status, safeCode, retry);
   if (status === 504) return new ApiClientError('timeout', 'The backend timed out. Try again.', status, safeCode);
   if (status >= 500) return new ApiClientError('upstream', 'The service is temporarily unavailable.', status, safeCode, retry);
@@ -76,6 +79,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
     init: RequestInit,
     decode: (response: Response) => Promise<T>,
     defaultTimeoutMs: number,
+    acceptProviderFailure = false,
   ): Promise<T> {
     if (init.signal?.aborted) throw new ApiClientError('cancelled', 'Request cancelled.');
     const controller = new AbortController();
@@ -104,6 +108,13 @@ export function createApiClient(options: ApiClientOptions = {}) {
       const operation = (async () => {
         const response = await fetchImpl(`${baseUrl}${path}`, { ...init, signal: controller.signal });
         if (!response.ok) {
+          if (acceptProviderFailure && [502, 503, 504].includes(response.status)) {
+            try {
+              const parsed = await decode(response.clone());
+              if (typeof parsed === 'object' && parsed !== null && 'status' in parsed &&
+                  parsed.status === 'provider_unavailable') return parsed;
+            } catch { /* Fall through to the safe HTTP classification. */ }
+          }
           throw classifyResponse(response.status, await responseCode(response), response.headers.get('retry-after'));
         }
         return decode(response);
@@ -140,6 +151,18 @@ export function createApiClient(options: ApiClientOptions = {}) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body), signal,
       }, response => response.json(), ITINERARY_TIMEOUT_MS);
+    },
+    createPlan(body: PlanCreateRequest, idempotencyKey: string, signal?: AbortSignal) {
+      if (!/^[A-Za-z0-9_-]{8,64}$/.test(idempotencyKey)) {
+        throw new ApiClientError('invalid_request', 'Invalid planning request key.');
+      }
+      return request<PlanCreateResponse>('/api/plans/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify(body), signal,
+      }, async response => {
+        try { return parsePlanningResponse(await response.json()); }
+        catch { throw new ApiClientError('unexpected', 'The planning response was incomplete.'); }
+      }, ITINERARY_TIMEOUT_MS, true);
     },
     resolvePhotoUrl(photoUrl: string | null): string | null {
       if (photoUrl === null) return null;
