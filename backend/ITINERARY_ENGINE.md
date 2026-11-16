@@ -1,4 +1,4 @@
-# Deterministic Itinerary Engine v1
+# Deterministic Itinerary Engine
 
 `itinerary-engine.js` is a pure CommonJS planner. `POST /api/plans/generate`
 accepts caller-supplied places and travel legs; it does not call Google, Gemini,
@@ -98,15 +98,21 @@ The response reports expansion count and rejection counts. `no_feasible_plan`
 has an empty `plans` array, never a fabricated route or price.
 
 Each plan's integer score is the weighted mean of these 0–100 components:
-relevance, mood match, selected-category coverage, preferred-place coverage,
-travel efficiency, expected-budget headroom, schedule slack, distinct-category
-variety and stop-count coverage. The default weights are respectively
-`4, 2, 2, 2, 2, 2, 1, 3, 2`. A caller may supply `weights` with any of these
+relevance (submitted score, default 50), mood-tag match, requested-category
+coverage, preferred-place coverage, visit minutes divided by visit plus travel
+minutes, expected-budget headroom, visit minutes divided by available minutes,
+distinct-category variety, and stop-count coverage. The default weights are
+respectively `3, 2, 4, 2, 3, 1, 4, 3, 1`. The schedule component rewards
+meaningful activity rather than unused time or longer travel. A caller may
+supply `weights` with any of these
 keys set to integer 0–10; omitted keys keep defaults, and all-zero weights are
 rejected. Hard constraints are checked before scoring. Results sort first by
 Budget Engine affordability (`fits_conservatively`, `potentially_fits`,
 `cannot_determine`), then descending score, descending stop count, then stable
-plan ID. Scores rank submitted data; they do not establish real-world quality.
+plan ID. After sorting, only the best route/order for each identical set of
+places is returned. This reduces near-duplicate recommendations without
+discarding distinct outings. Scores rank submitted data; they do not establish
+real-world quality. Unknown prices never become confirmed affordability.
 
 ## Response and budget semantics
 
@@ -114,7 +120,12 @@ A successful generation returns `status: "plans_found"`, up to six plans,
 `search` metrics and top-level warnings. Each plan has a stable ID, UTC start
 and end, ordered stops with arrival/visit/departure times, directed travel
 legs, a full expense list, the **unmodified Budget Engine evaluation**, a
-nullable spending range, remaining budget, score components and warnings.
+nullable spending range, remaining budget, score components, `quality` and
+warnings. `quality` reports available, visit, travel, waiting, scheduled span,
+and unused minutes; useful time utilization is `(visit + travel) / available`,
+and travel efficiency is `visit / (visit + travel)`. These are planning
+measurements, not a claim that every minute should be filled. The category
+coverage array contains only requested categories present in the plan.
 For the fictional request above, the single plan starts at
 `2026-01-01T04:30:00.000Z`, arrives at `04:40`, ends at `05:40`, and has
 minimum/expected/maximum costs of **₹170/₹220/₹270**, with ₹2,530 remaining.

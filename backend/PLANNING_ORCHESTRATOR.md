@@ -36,8 +36,14 @@ search radii, result limits, cost claims, source status or call budgets.
 ## Work and cost bounds
 
 The server requests at most **8** Places results within **3,000 metres** and
-deterministically selects at most **4** route candidates by requested category
-order, then Place ID. Exclusions, invalid identities and fixed-schedule
+deterministically selects at most **4** route candidates in requested-category
+rounds. Within a category it prefers confirmed operational status, a supplied
+matching mood tag, then a coarse 500-metre distance bucket and Place ID.
+Straight-line distance only orders the shortlist; it is never reported as a
+route time. This gives each selected category
+an opportunity to appear before the remaining slots are filled. It does not
+invent mood, popularity, rating or source-quality scores absent from the
+current Places field mask. Exclusions, invalid identities and fixed-schedule
 activities are removed before routing. One Places request and one Routes
 matrix request are the only allowed provider calls. The Express request
 context allows at most two provider calls total; each adapter itself makes
@@ -100,7 +106,7 @@ need its own provenance and validation before changing that.
 The response includes `status`, `demo`, `plans`, `provisionalPlans`,
 `suggestions`, `exclusions`, `warnings`, `providers`, `attribution`, `usage`
 and, when planning reaches the engine, `search`. Each plan retains the
-engine's exact timed stops, directed travel legs, expenses, score and Budget
+engine's exact timed stops, directed travel legs, expenses, score, quality metrics and Budget
 Engine evaluation, plus a `budgetSummary`, duration provenance and data
 quality flags. `suggestions` expose the shortlisted places independently of
 whether a complete route or schedule was possible. `exclusions` give stable

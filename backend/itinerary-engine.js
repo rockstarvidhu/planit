@@ -3,8 +3,8 @@ const { evaluateBudget, BudgetInputError } = require('./budget-engine');
 
 const LIMITS = Object.freeze({ candidates: 12, stops: 4, expansions: 300, results: 6,
   expensesPerPlace: 5, windowsPerPlace: 14, legs: 180, availableMinutes: 720 });
-const DEFAULT_WEIGHTS = Object.freeze({ relevance: 4, mood: 2, category: 2, preferred: 2,
-  travel: 2, budget: 2, schedule: 1, variety: 3, coverage: 2 });
+const DEFAULT_WEIGHTS = Object.freeze({ relevance: 3, mood: 2, category: 4, preferred: 2,
+  travel: 3, budget: 1, schedule: 4, variety: 3, coverage: 1 });
 const WEIGHT_KEYS = Object.keys(DEFAULT_WEIGHTS);
 
 class ItineraryInputError extends Error {
@@ -182,23 +182,38 @@ function availability(candidate, arrival, preferences) {
   return null;
 }
 
-function scorePlan(stops, travelMinutes, end, budget, preferences, weights) {
+function scorePlan(stops, travelMinutes, budget, preferences, weights) {
   const n = stops.length;
   const distinct = new Set(stops.map(stop => stop.category)).size;
+  const visits = stops.reduce((sum, stop) => sum + stop.visitMinutes, 0);
+  const requested = stops.filter(stop => preferences.categories.includes(stop.category));
+  const usefulMinutes = visits + travelMinutes;
   const components = {
     relevance: Math.floor(stops.reduce((sum, stop) => sum + stop.relevanceScore, 0) / n),
     mood: preferences.mood ? Math.floor(stops.filter(stop => stop.tags.includes(preferences.mood)).length * 100 / n) : 50,
-    category: preferences.categories.length ? Math.floor(new Set(stops.map(stop => stop.category)).size * 100 / preferences.categories.length) : 50,
+    category: preferences.categories.length ? Math.floor(new Set(requested.map(stop => stop.category)).size * 100 / preferences.categories.length) : 50,
     preferred: Math.floor(stops.filter(stop => preferences.preferredPlaceIds.includes(stop.placeId)).length * 100 / n),
-    travel: Math.max(0, 100 - Math.floor(travelMinutes * 100 / preferences.availableMinutes)),
+    travel: Math.floor(visits * 100 / usefulMinutes),
     budget: budget.remainingBudget === null ? 0 : Math.max(0, Math.min(100, Math.floor(budget.remainingBudget * 100 / Math.max(1, budget.spendableBudget)))),
-    schedule: Math.max(0, 100 - Math.floor((end - preferences.start) / 60000 * 100 / preferences.availableMinutes)),
+    schedule: Math.min(100, Math.floor(visits * 100 / preferences.availableMinutes)),
     variety: Math.floor(distinct * 100 / n),
     coverage: Math.floor(n * 100 / preferences.maxStops),
   };
   const weighted = WEIGHT_KEYS.reduce((sum, key) => sum + components[key] * weights[key], 0);
   const denominator = WEIGHT_KEYS.reduce((sum, key) => sum + weights[key], 0);
   return { value: Math.floor(weighted / denominator), components };
+}
+
+function qualityMetrics(stops, travelMinutes, end, preferences) {
+  const visitMinutes = stops.reduce((sum, stop) => sum + stop.visitMinutes, 0);
+  const waitingMinutes = stops.reduce((sum, stop) => sum + stop.waitMinutes, 0);
+  const scheduledSpanMinutes = (end - preferences.start) / 60000;
+  return { availableMinutes: preferences.availableMinutes, visitMinutes, travelMinutes,
+    waitingMinutes, scheduledSpanMinutes, unusedMinutes: preferences.availableMinutes - scheduledSpanMinutes,
+    usefulTimeUtilization: (visitMinutes + travelMinutes) / preferences.availableMinutes,
+    travelEfficiency: visitMinutes / (visitMinutes + travelMinutes),
+    categoryCoverage: [...new Set(stops.filter(stop => preferences.categories.includes(stop.category))
+      .map(stop => stop.category))] };
 }
 
 function generateItineraries(input) {
@@ -236,13 +251,14 @@ function generateItineraries(input) {
     if (budget.affordability === 'exceeds') { issues.budgetExceeded++; return; }
     const warnings = [...state.warnings, ...budget.warnings];
     if (p.returnToStart && legs.at(-1).confidence === 'estimated') warnings.push({ code: 'ESTIMATED_TRAVEL_TIME', leg: `${state.lastId}->origin` });
-    const score = scorePlan(state.stops, travelMinutes, end, budget, p, weights);
+    const score = scorePlan(state.stops, travelMinutes, budget, p, weights);
     const ids = state.stops.map(stop => stop.placeId);
     plans.push({ id: stableId('plan', [p.start, ids, p.budgetAmount, p.budgetMode, p.people, p.transportMode, p.returnToStart]),
       startAt: new Date(p.start).toISOString(), endAt: new Date(end).toISOString(),
       stops: state.stops, travelLegs: legs, expenses, budget,
       estimatedSpendingRange: { minimum: budget.totalMinimumCost, expected: budget.totalExpectedCost, maximum: budget.totalMaximumCost },
-      remainingBudget: budget.remainingBudget, score, warnings });
+      remainingBudget: budget.remainingBudget, score,
+      quality: qualityMetrics(state.stops, travelMinutes, end, p), warnings });
   };
   const expand = state => {
     if (state.stops.length) pushPlan(state);
@@ -283,7 +299,16 @@ function generateItineraries(input) {
   const affordabilityRank = { fits_conservatively: 0, potentially_fits: 1, cannot_determine: 2 };
   plans.sort((a, b) => affordabilityRank[a.budget.affordability] - affordabilityRank[b.budget.affordability] ||
     b.score.value - a.score.value || b.stops.length - a.stops.length || compare(a.id, b.id));
-  return { status: plans.length ? 'plans_found' : 'no_feasible_plan', plans: plans.slice(0, LIMITS.results),
+  const distinctPlans = [];
+  const seenSets = new Set();
+  for (const plan of plans) {
+    const signature = plan.stops.map(stop => stop.placeId).sort(compare).join('\u0000');
+    if (seenSets.has(signature)) continue;
+    seenSets.add(signature);
+    distinctPlans.push(plan);
+    if (distinctPlans.length === LIMITS.results) break;
+  }
+  return { status: plans.length ? 'plans_found' : 'no_feasible_plan', plans: distinctPlans,
     search: { expansions, expansionLimit: LIMITS.expansions, limitReached, candidatesConsidered: eligible.length,
       plansEvaluated: plans.length, issues },
     warnings: limitReached ? [{ code: 'SEARCH_LIMIT_REACHED' }] : [] };

@@ -9,6 +9,14 @@ const SHORTLIST_LIMIT = 4;
 const RADIUS_METERS = 3000;
 const DEFAULT_DURATIONS = Object.freeze({ Cafe: 45, Food: 75, Outdoors: 60, Shopping: 60 });
 const FIXED_SCHEDULE_CATEGORIES = new Set(['Movies']);
+function distanceBucket(origin, candidate) {
+  const radians = Math.PI / 180;
+  const lat = (candidate.latitude - origin.latitude) * radians;
+  const lng = (candidate.longitude - origin.longitude) * radians;
+  const arc = Math.sin(lat / 2) ** 2 + Math.cos(origin.latitude * radians) *
+    Math.cos(candidate.latitude * radians) * Math.sin(lng / 2) ** 2;
+  return Math.floor(12742000 * Math.asin(Math.min(1, Math.sqrt(arc))) / 500);
+}
 const validId = value => typeof value === 'string' && value.trim() && value.length <= 80 &&
   !Array.from(value).some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
 const integer = (value, name, min, max) => {
@@ -136,11 +144,25 @@ async function createPlan(body, options = {}) {
     warnings.push({ code: duration.source === 'rove_planning_assumption' ? 'ASSUMED_VISIT_DURATION' : 'USER_ESTIMATED_VISIT_DURATION',
       placeId: candidate.id });
   }
-  const categoryOrder = new Map(preferences.categories.map((category, index) => [category, index]));
-  candidates.sort((a, b) => (categoryOrder.get(a.category) ?? 99) - (categoryOrder.get(b.category) ?? 99) ||
-    a.id.localeCompare(b.id));
-  for (const candidate of candidates.slice(SHORTLIST_LIMIT)) exclusions.push({ placeId: candidate.id, reason: 'SHORTLIST_LIMIT' });
-  const shortlist = candidates.slice(0, SHORTLIST_LIMIT);
+  // Cover each requested category once before filling remaining slots. Places does not
+  // provide a defensible mood or relevance score under the current field mask.
+  const buckets = preferences.categories.map(category => candidates.filter(item => item.category === category)
+    .sort((a, b) => Number(b.businessStatus === 'OPERATIONAL') - Number(a.businessStatus === 'OPERATIONAL') ||
+      Number(b.tags?.includes(preferences.mood)) - Number(a.tags?.includes(preferences.mood)) ||
+      distanceBucket(preferences.origin, a) - distanceBucket(preferences.origin, b) || a.id.localeCompare(b.id)));
+  const selectedIds = new Set();
+  const shortlist = [];
+  while (shortlist.length < SHORTLIST_LIMIT && buckets.some(bucket => bucket.length)) {
+    for (const bucket of buckets) {
+      if (shortlist.length >= SHORTLIST_LIMIT || !bucket.length) continue;
+      const candidate = bucket.shift();
+      shortlist.push(candidate);
+      selectedIds.add(candidate.id);
+    }
+  }
+  for (const candidate of candidates) if (!selectedIds.has(candidate.id)) {
+    exclusions.push({ placeId: candidate.id, reason: 'SHORTLIST_LIMIT' });
+  }
   const attribution = { googleMapsRequired: places.attribution?.googleMapsRequired === true,
     googleCopyrightRequired: false,
     thirdParty: shortlist.flatMap(candidate => candidate.attribution?.thirdParty ?? []) };

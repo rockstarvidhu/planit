@@ -2,6 +2,7 @@ const request = require('supertest');
 const axios = require('axios');
 const app = require('./index');
 const { generateItineraries, ItineraryInputError, LIMITS, DEFAULT_WEIGHTS } = require('./itinerary-engine');
+const { scenarios } = require('./benchmarks/itinerary-quality');
 
 jest.mock('axios');
 
@@ -32,6 +33,41 @@ const only = key => Object.fromEntries(Object.keys(DEFAULT_WEIGHTS).map(name => 
 const ids = plan => plan.stops.map(stop => stop.placeId);
 
 describe('deterministic itinerary engine', () => {
+  test('five-hour mixed outing uses time and covers requested categories without exceeding bounds', () => {
+    const { request: body } = scenarios[1];
+    const result = generateItineraries(body);
+    const best = result.plans[0];
+    expect(best.stops.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(best.stops.map(stop => stop.category))).toEqual(new Set(['Cafe', 'Food']));
+    expect(best.quality.usefulTimeUtilization).toBeGreaterThan(0.6);
+    expect(best.quality.scheduledSpanMinutes).toBeLessThanOrEqual(body.preferences.availableMinutes);
+    expect(best.quality.visitMinutes + best.quality.travelMinutes + best.quality.waitingMinutes)
+      .toBe(best.quality.scheduledSpanMinutes);
+    expect(result.search.expansions).toBeLessThanOrEqual(LIMITS.expansions);
+    expect(generateItineraries(body)).toEqual(result);
+  });
+
+  test('quality never converts unknown prices, hours or missing directed routes into certainty', () => {
+    const unknown = generateItineraries(scenarios[7].request).plans[0];
+    expect(unknown.budget.affordability).toBe('cannot_determine');
+    expect(unknown.warnings.map(item => item.code)).toContain('UNKNOWN_OPENING_HOURS');
+    expect(unknown.quality.unusedMinutes).toBeGreaterThanOrEqual(0);
+    const disconnected = generateItineraries(scenarios[4].request);
+    expect(disconnected.plans.every(plan => plan.stops.length === 1)).toBe(true);
+    expect(disconnected.search.issues.missingRoute).toBeGreaterThan(0);
+  });
+
+  test('equivalent stop sets are returned once and shorter directed travel wins', () => {
+    const body = requestBody({ candidates: [place('a'), place('b', { category: 'Food' })],
+      travelLegs: [leg('origin', 'a', 5), leg('origin', 'b', 25), leg('a', 'b', 5), leg('b', 'a', 25)] });
+    const result = generateItineraries(body);
+    const mixed = result.plans.filter(plan => plan.stops.length === 2);
+    expect(mixed).toHaveLength(1);
+    expect(ids(mixed[0])).toEqual(['a', 'b']);
+    expect(mixed[0].quality.travelEfficiency).toBeGreaterThan(0.8);
+    expect(result.search.plansEvaluated).toBe(4);
+  });
+
   test('one stop has exact arrival, departure, transport expense and budget evaluation', () => {
     const result = generateItineraries(requestBody());
     expect(result.status).toBe('plans_found');

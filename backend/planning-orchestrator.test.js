@@ -126,6 +126,27 @@ describe('bounded planning orchestrator', () => {
     expect(returning.usage.routeElements).toBe(25);
   });
 
+  test('shortlist represents both selected categories despite a cafe-heavy response', async () => {
+    const places = [...['a', 'b', 'c', 'd', 'e', 'f'].map((id, index) =>
+      rawPlace(id, 'cafe', 12.971 + index * 0.0001)),
+    rawPlace('food', 'restaurant', 12.972)];
+    const deps = dependencies(places);
+    const result = await createPlan(input(), { deps, now: NOW });
+    expect(result.suggestions.map(item => item.id)).toEqual(['a', 'food', 'b', 'c']);
+    expect(result.usage.routeElements).toBe(20);
+    expect(deps.discoverPlaces).toHaveBeenCalledTimes(1);
+    expect(deps.computeRouteMatrix).toHaveBeenCalledTimes(1);
+  });
+
+  test('within-category selection is local and duplicate IDs do not consume slots', async () => {
+    const places = [rawPlace('a-far', 'cafe', 12.99), rawPlace('b-near', 'cafe', 12.971),
+      rawPlace('b-near', 'cafe', 12.971), rawPlace('food', 'restaurant', 12.972)];
+    const result = await createPlan(input(), { deps: dependencies(places), now: NOW });
+    expect(result.suggestions.map(item => item.id)).toEqual(['b-near', 'food', 'a-far']);
+    expect(new Set(result.suggestions.map(item => item.id)).size).toBe(result.suggestions.length);
+    expect(result.usage.routeElements).toBe(12);
+  });
+
   test('provider-disabled, timeout and quota are explicit non-success statuses', async () => {
     const disabled = await createPlan(input(), { now: NOW });
     expect(disabled).toMatchObject({ status: 'provider_unavailable', httpStatus: 503,
