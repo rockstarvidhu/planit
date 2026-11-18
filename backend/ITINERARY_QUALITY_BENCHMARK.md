@@ -6,6 +6,29 @@ baseline was captured from checkpoint `0848a7f4` before 4F.2 changes. No
 provider adapter or network call is used. The harness reports the top-ranked
 plan, all plan rankings, schedule and uncertainty metrics, expansion counts,
 feasible option counts, rejection reasons and one-run execution time.
+Run `node benchmarks/itinerary-quality.js --hours` for the 4F.3 dated-hours
+comparison on the same four-candidate mixed scenario. It replaces the baseline
+all-unknown hours with two dated-open venues, one explicitly closed venue and
+one unknown venue. Both runs are synthetic and use the existing pure engine.
+
+| Hours comparison | All unknown baseline | Dated-hours aware |
+|---|---:|---:|
+| Top-plan supported stops | 0 | 2 |
+| Closed candidate stops excluded | 0 | 1 |
+| Top-plan unknown stops | 3 | 1 |
+| Returned valid plans | 6 | 6 |
+| Price-and-hours confirmed engine plans | 0 | 2 |
+| Provisional engine plans | 6 | 4 |
+| Search expansions | 40 | 25 |
+| Top-plan useful utilization | 73% | 73% |
+| Top-plan category coverage | 2 | 2 |
+
+The confirmed counts above refer to synthetic engine plans with known fixture
+prices; the orchestrator still marks every fixture response provisional. The
+top plan is unchanged because it did not use the closed venue. In other data,
+rejecting a closure can correctly reduce plan availability. Wall-clock timings
+are emitted but are one-run measurements and should not be treated as a
+performance improvement claim.
 
 Useful utilization is `(visit minutes + directed travel minutes) / available
 minutes`. This measures scheduled use, including necessary travel; it does

@@ -1,5 +1,6 @@
 const { performance } = require('node:perf_hooks');
 const { generateItineraries } = require('../itinerary-engine');
+const { normalizeCurrentHours } = require('../opening-hours');
 
 const startAt = '2026-01-01T10:00:00+05:30';
 const known = { status: 'known', windows: [{ opensAt: '2026-01-01T09:00:00+05:30', closesAt: '2026-01-01T20:00:00+05:30' }] };
@@ -62,5 +63,40 @@ function evaluate(item) {
     noResultReason: plan ? null : result.search.issues, milliseconds };
 }
 
-if (require.main === module) process.stdout.write(`${JSON.stringify(scenarios.map(evaluate), null, 2)}\n`);
-module.exports = { scenarios, evaluate };
+function evaluateHours() {
+  const base = scenarios[1].request;
+  const fetchedAt = Date.parse('2026-01-01T04:00:00Z');
+  const point = (hour, minute = 0) => ({ date: { year: 2026, month: 1, day: 1 }, hour, minute });
+  const hours = periods => normalizeCurrentHours({ timeZone: { id: 'Asia/Kolkata' },
+    currentOpeningHours: { periods } }, base.preferences.startAt, fetchedAt);
+  const current = [
+    hours([{ open: point(9), close: point(19) }]),
+    hours([]),
+    { status: 'unknown', reason: 'HOURS_UNAVAILABLE' },
+    hours([{ open: point(9), close: point(19) }]),
+  ];
+  const compare = opening => {
+    const request = { ...base, candidates: base.candidates.map((candidate, index) =>
+      ({ ...candidate, opening: opening[index] })) };
+    const begun = performance.now();
+    const result = generateItineraries(request);
+    const milliseconds = Math.round((performance.now() - begun) * 1000) / 1000;
+    const confirmed = result.plans.filter(plan => plan.budget.affordability === 'fits_conservatively' &&
+      plan.stops.every(stop => stop.hoursValidation.status === 'open'));
+    return { candidateHours: opening.map(item => item.status),
+      supportedStops: result.plans[0]?.stops.filter(stop => stop.hoursValidation.status === 'open').length ?? 0,
+      excludedClosedStops: opening.filter(item => item.status === 'closed').length,
+      unknownStops: result.plans[0]?.stops.filter(stop => stop.hoursValidation.status === 'unknown').length ?? 0,
+      validPlans: result.plans.length, provisionalPlans: result.plans.length - confirmed.length,
+      confirmedPlans: confirmed.length, expansions: result.search.expansions,
+      usefulUtilization: result.plans[0]?.quality.usefulTimeUtilization ?? 0,
+      categoryCoverage: result.plans[0]?.quality.categoryCoverage.length ?? 0,
+      topStopIds: result.plans[0]?.stops.map(stop => stop.placeId) ?? [], milliseconds };
+  };
+  return { baseline: compare(base.candidates.map(() => ({ status: 'unknown', reason: 'HOURS_UNAVAILABLE' }))),
+    hoursAware: compare(current) };
+}
+
+if (require.main === module) process.stdout.write(`${JSON.stringify(process.argv.includes('--hours') ?
+  evaluateHours() : scenarios.map(evaluate), null, 2)}\n`);
+module.exports = { scenarios, evaluate, evaluateHours };

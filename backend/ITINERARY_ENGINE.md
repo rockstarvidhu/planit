@@ -69,6 +69,11 @@ offsets across a daylight-saving boundary represent the actual elapsed time.
 The Places (New) adapter materializes provider current hours into these dated
 windows only when reliable; this engine does not infer a time zone from coordinates.
 Unknown hours permit a plan only with `UNKNOWN_OPENING_HOURS` warning.
+Current provider hours may also carry `validFrom`/`validUntil` coverage and
+`source: "current_opening_hours"`. A visit outside that coverage is unknown,
+not a proven closure. An explicitly empty dated schedule has `status: "closed"`. Each stop now
+has an additive `hoursValidation` result; a closed visit is never returned.
+See `OPENING_HOURS_VALIDATION.md`.
 When the venue opens later, the engine waits at most `maxWaitMinutes` and counts
 the wait against the available duration. Arrival, the entire visit, and any
 return leg must fit the schedule.

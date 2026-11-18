@@ -85,6 +85,12 @@ The orchestrator requests current hours only when the existing
 higher-cost Places field. It never upgrades unknown hours to known. It lets
 the existing engine calculate a tentative schedule using unknown hours, but
 places that schedule **only in `provisionalPlans`**, never confirmed `plans`.
+The hours normalizer retains the provider's dated seven-day coverage, and the
+engine evaluates each whole visit against it. A known closure excludes the
+stop; a visit outside coverage remains unknown and provisional. Each stop's
+additive `hoursValidation` explains this result. The Enterprise flag is
+disabled by default and no extra provider call or field-mask change was made
+in 4F.3. See `OPENING_HOURS_VALIDATION.md` for source precedence and costs.
 Provider-current dated hours may support a confirmed schedule, subject to
 later real-world changes. No ordinary weekly hours are expanded into dates.
 

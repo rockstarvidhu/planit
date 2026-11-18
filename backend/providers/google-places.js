@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { HttpError, invalid, numeric, bodyObject, providerError, LIMITS } = require('../security');
+const { normalizeCurrentHours } = require('../opening-hours');
 
 const URL = 'https://places.googleapis.com/v1/places:searchNearby';
 const MAX_RESULTS = 12;
@@ -45,68 +46,10 @@ function validateInput(body) {
     includeOpeningHours, plannedAt: request.plannedAt ?? null };
 }
 
-function zoneParts(time, formatter) {
-  const parts = Object.fromEntries(formatter.formatToParts(time).filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
-  return { year: parts.year, month: parts.month, day: parts.day, hour: parts.hour, minute: parts.minute };
-}
-
-function formatterFor(zone) {
-  try {
-    return new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit',
-      day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-  } catch { return null; }
-}
-
-function localEpoch(point, formatter) {
-  if (!point || !point.date || typeof point.date !== 'object') return null;
-  const { year, month, day } = point.date;
-  const { hour, minute } = point;
-  if (![year, month, day, hour, minute].every(Number.isInteger) || year < 2000 || year > 2100 ||
-      hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
-  const local = Date.UTC(year, month - 1, day, hour, minute);
-  const date = new Date(local);
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
-  const target = { year, month, day, hour, minute };
-  const possible = new Set();
-  for (const sample of [local - 86400000, local, local + 86400000]) {
-    const zoned = zoneParts(sample, formatter);
-    const offset = Date.UTC(zoned.year, zoned.month - 1, zoned.day, zoned.hour, zoned.minute) - sample;
-    const epoch = local - offset;
-    const actual = zoneParts(epoch, formatter);
-    if (Object.keys(target).every(key => actual[key] === target[key])) possible.add(epoch);
-  }
-  // Ambiguous fall-back or nonexistent spring-forward local times remain unknown.
-  return possible.size === 1 ? [...possible][0] : null;
-}
-
-function openingData(place, plannedAt, fetchedAt) {
-  if (!plannedAt) return { opening: { status: 'unknown' }, reason: 'HOURS_NOT_REQUESTED' };
-  const zone = place.timeZone?.id;
-  const formatter = typeof zone === 'string' ? formatterFor(zone) : null;
-  const hours = place.currentOpeningHours;
-  if (!formatter || !hours || !Array.isArray(hours.periods) || hours.periods.length === 0) {
-    return { opening: { status: 'unknown' }, reason: 'HOURS_UNAVAILABLE' };
-  }
-  const planned = zoneParts(Date.parse(plannedAt), formatter);
-  const current = zoneParts(fetchedAt, formatter);
-  const dayDifference = (Date.UTC(planned.year, planned.month - 1, planned.day) -
-    Date.UTC(current.year, current.month - 1, current.day)) / 86400000;
-  if (dayDifference < 0 || dayDifference > 6) return { opening: { status: 'unknown' }, reason: 'HOURS_OUTSIDE_CURRENT_WINDOW' };
-  if (hours.periods.length > 14) return { opening: { status: 'unknown' }, reason: 'HOURS_UNUSABLE' };
-  const windows = [];
-  for (const period of hours.periods) {
-    const opens = localEpoch(period?.open, formatter);
-    const closes = localEpoch(period?.close, formatter);
-    if (opens === null || closes === null || closes <= opens || closes - opens > 48 * 3600000) {
-      return { opening: { status: 'unknown' }, reason: 'HOURS_UNUSABLE' };
-    }
-    windows.push({ opensAt: new Date(opens).toISOString(), closesAt: new Date(closes).toISOString() });
-  }
-  windows.sort((a, b) => a.opensAt.localeCompare(b.opensAt));
-  for (let i = 1; i < windows.length; i++) if (windows[i].opensAt < windows[i - 1].closesAt) {
-    return { opening: { status: 'unknown' }, reason: 'HOURS_UNUSABLE' };
-  }
-  return { opening: { status: 'known', windows }, confidence: 'provider_current_hours' };
+function openingData(place, plannedAt, fetchedAt, provider) {
+  const opening = normalizeCurrentHours(place, plannedAt, fetchedAt, provider);
+  return { opening, ...(['known', 'closed'].includes(opening.status) ?
+    { confidence: 'provider_current_hours' } : { reason: opening.reason }) };
 }
 
 function attributionData(raw, google) {
@@ -136,7 +79,7 @@ function normalizePlace(place, input, sourceKind, fetchedAt) {
   const types = [place.primaryType, ...(Array.isArray(place.types) ? place.types : [])];
   const category = types.map(type => TYPE_CATEGORY[type]).find(Boolean);
   if (!category || !input.categories.includes(category)) return { reason: 'IRRELEVANT_TYPE' };
-  const hours = input.includeOpeningHours ? openingData(place, input.plannedAt, fetchedAt) :
+  const hours = input.includeOpeningHours ? openingData(place, input.plannedAt, fetchedAt, sourceKind) :
     { opening: { status: 'unknown' }, reason: 'HOURS_NOT_REQUESTED' };
   const warnings = [{ code: 'PRICE_UNKNOWN', placeId: place.id }, { code: 'VISIT_DURATION_UNKNOWN', placeId: place.id }];
   if (hours.reason) warnings.push({ code: hours.reason, placeId: place.id });

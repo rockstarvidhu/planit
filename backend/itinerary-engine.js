@@ -1,5 +1,6 @@
 const { createHash } = require('node:crypto');
 const { evaluateBudget, BudgetInputError } = require('./budget-engine');
+const { evaluateVisitHours } = require('./opening-hours');
 
 const LIMITS = Object.freeze({ candidates: 12, stops: 4, expansions: 300, results: 6,
   expensesPerPlace: 5, windowsPerPlace: 14, legs: 180, availableMinutes: 720 });
@@ -54,9 +55,23 @@ function opening(value, field) {
   obj(value, field);
   if (value.status === 'unknown') {
     if (value.windows !== undefined) fail(`${field}.windows`);
-    return { status: 'unknown' };
+    return { status: 'unknown', ...(value.reason ? { reason: text(value.reason, `${field}.reason`, 80) } : {}),
+      ...(value.source ? { source: text(value.source, `${field}.source`, 60) } : {}),
+      ...(value.timeZone ? { timeZone: text(value.timeZone, `${field}.timeZone`, 80) } : {}),
+      ...(value.regularPeriods ? { regularPeriods: list(value.regularPeriods, `${field}.regularPeriods`, 14) } : {}) };
+  }
+  if (value.status === 'closed') {
+    if (value.windows !== undefined || value.validFrom === undefined || value.validUntil === undefined ||
+        instant(value.validUntil, `${field}.validUntil`) <= instant(value.validFrom, `${field}.validFrom`)) fail(`${field}.coverage`);
+    return { status: 'closed', validFrom: value.validFrom, validUntil: value.validUntil,
+      ...(value.source ? { source: text(value.source, `${field}.source`, 60) } : {}) };
   }
   if (value.status !== 'known') fail(`${field}.status`);
+  const hasCoverage = value.validFrom !== undefined || value.validUntil !== undefined;
+  if (hasCoverage && (value.validFrom === undefined || value.validUntil === undefined)) fail(`${field}.coverage`);
+  if (hasCoverage && instant(value.validUntil, `${field}.validUntil`) <= instant(value.validFrom, `${field}.validFrom`)) fail(`${field}.coverage`);
+  if (value.source !== undefined && !['current_opening_hours', 'supplied_schedule'].includes(value.source)) fail(`${field}.source`);
+  if (value.source === 'current_opening_hours' && !hasCoverage) fail(`${field}.coverage`);
   const windows = list(value.windows, `${field}.windows`, LIMITS.windowsPerPlace).map((window, index) => {
     const key = `${field}.windows[${index}]`;
     obj(window, key);
@@ -66,7 +81,9 @@ function opening(value, field) {
     return { opens, closes };
   }).sort((a, b) => a.opens - b.opens || a.closes - b.closes);
   for (let i = 1; i < windows.length; i++) if (windows[i].opens < windows[i - 1].closes) fail(`${field}.windows`);
-  return { status: 'known', windows };
+  return { status: 'known', windows,
+    ...(hasCoverage ? { validFrom: value.validFrom, validUntil: value.validUntil } : {}),
+    ...(value.source ? { source: value.source } : {}) };
 }
 
 function localityKm(a, b) {
@@ -171,14 +188,22 @@ function prepare(input) {
 }
 
 function availability(candidate, arrival, preferences) {
-  if (candidate.opening.status === 'unknown') return { visitStart: arrival, waitMinutes: 0, unknown: true };
+  if (candidate.opening.status === 'closed') {
+    const validation = evaluateVisitHours(candidate.opening, arrival, arrival + candidate.visitMinutes * 60000);
+    return validation.status === 'unknown' ? { visitStart: arrival, waitMinutes: 0, validation } : null;
+  }
+  if (candidate.opening.status === 'unknown') return { visitStart: arrival, waitMinutes: 0,
+    validation: evaluateVisitHours(candidate.opening, arrival, arrival + candidate.visitMinutes * 60000) };
   for (const window of candidate.opening.windows) {
     const visitStart = Math.max(arrival, window.opens);
     const waitMinutes = (visitStart - arrival) / 60000;
     if (waitMinutes <= preferences.maxWaitMinutes && visitStart + candidate.visitMinutes * 60000 <= window.closes) {
-      return { visitStart, waitMinutes, unknown: false };
+      const validation = evaluateVisitHours(candidate.opening, visitStart, visitStart + candidate.visitMinutes * 60000);
+      if (validation.status === 'open') return { visitStart, waitMinutes, validation };
     }
   }
+  const validation = evaluateVisitHours(candidate.opening, arrival, arrival + candidate.visitMinutes * 60000);
+  if (validation.status === 'unknown') return { visitStart: arrival, waitMinutes: 0, validation };
   return null;
 }
 
@@ -279,12 +304,13 @@ function generateItineraries(input) {
       const budget = budgetCheck(p, expenses);
       if (budget.affordability === 'exceeds') { issues.budgetExceeded++; continue; }
       const warnings = [...state.warnings];
-      if (available.unknown) warnings.push({ code: 'UNKNOWN_OPENING_HOURS', placeId: candidate.id });
+      if (available.validation.status === 'unknown') warnings.push({ code: 'UNKNOWN_OPENING_HOURS', placeId: candidate.id });
       if (leg.confidence === 'estimated') warnings.push({ code: 'ESTIMATED_TRAVEL_TIME', leg: `${state.lastId}->${candidate.id}` });
       const stop = { placeId: candidate.id, name: candidate.name, category: candidate.category,
         relevanceScore: candidate.relevanceScore, tags: candidate.tags, visitMinutes: candidate.visitMinutes,
         arrivalAt: new Date(arrival).toISOString(), visitStartAt: new Date(available.visitStart).toISOString(),
-        departureAt: new Date(departure).toISOString(), waitMinutes: available.waitMinutes };
+        departureAt: new Date(departure).toISOString(), waitMinutes: available.waitMinutes,
+        hoursValidation: available.validation };
       const travelLeg = { fromId: leg.fromId, toId: leg.toId, mode: leg.mode, durationMinutes: leg.durationMinutes,
         confidence: leg.confidence, ...(leg.distanceMeters === undefined ? {} : { distanceMeters: leg.distanceMeters }),
         ...(leg.source ? { source: leg.source } : {}),

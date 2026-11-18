@@ -213,7 +213,7 @@ async function createPlan(body, options = {}) {
   const plans = [];
   const provisionalPlans = [];
   for (const plan of generated.plans) {
-    const unknownHours = plan.stops.some(stop => shortlist.find(candidate => candidate.id === stop.placeId)?.opening?.status !== 'known');
+    const unknownHours = plan.stops.some(stop => stop.hoursValidation?.status !== 'open');
     const budget = budgetView(plan, preferences);
     const enriched = { ...plan, budgetSummary: budget,
       planningDurations: plan.stops.map(stop => ({ placeId: stop.placeId,

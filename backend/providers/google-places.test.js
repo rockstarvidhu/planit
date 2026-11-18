@@ -118,16 +118,18 @@ describe('Google Places (New) adapter: offline, bounded and fail closed', () => 
       { open: point(2026, 1, 1, 22), close: point(2026, 1, 2, 2) } ] } })] });
     const result = await discoverPlaces(body({ includeOpeningHours: true, plannedAt: '2026-01-01T23:00:00+05:30' }), options);
     expect(options.transport.post.mock.calls[0][2].headers['X-Goog-FieldMask']).toBe(BASE_FIELDS + HOURS_FIELDS);
-    expect(result.candidates[0].opening).toEqual({ status: 'known', windows: [
+    expect(result.candidates[0].opening).toMatchObject({ status: 'known', windows: [
       { opensAt: '2026-01-01T16:30:00.000Z', closesAt: '2026-01-01T20:30:00.000Z' } ] });
     expect(result.candidates[0].provenance.openingConfidence).toBe('provider_current_hours');
+    expect(result.candidates[0].opening).toMatchObject({ placeId: result.candidates[0].id,
+      provider: 'google_places_new', source: 'current_opening_hours' });
   });
 
   test('special dated hours are used; absent, invalid-zone and out-of-window hours remain unknown', () => {
     const hours = { timeZone: { id: 'America/New_York' }, currentOpeningHours: { periods: [
       { open: point(2026, 3, 8, 1), close: point(2026, 3, 8, 3, 30) } ] } };
     const fetchedAt = Date.parse('2026-03-08T12:00:00Z');
-    expect(openingData(hours, '2026-03-08T01:30:00-05:00', fetchedAt).opening).toEqual({ status: 'known', windows: [
+    expect(openingData(hours, '2026-03-08T01:30:00-05:00', fetchedAt).opening).toMatchObject({ status: 'known', windows: [
       { opensAt: '2026-03-08T06:00:00.000Z', closesAt: '2026-03-08T07:30:00.000Z' } ] });
     expect(openingData(hours, '2026-03-16T12:00:00-04:00', fetchedAt).opening.status).toBe('unknown');
     expect(openingData({ ...hours, timeZone: { id: 'Not/AZone' } }, '2026-03-08T12:00:00Z', fetchedAt).opening.status).toBe('unknown');

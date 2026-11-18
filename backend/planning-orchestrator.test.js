@@ -74,6 +74,24 @@ describe('bounded planning orchestrator', () => {
     expect(result.provisionalPlans[0].warnings.map(item => item.code)).toContain('UNKNOWN_OPENING_HOURS');
   });
 
+  test('dated closure is excluded while unknown hours remain provisional across mixed stops', async () => {
+    const open = rawPlace('open-cafe', 'cafe', 12.971);
+    const closed = rawPlace('closed-food', 'restaurant', 12.972,
+      { currentOpeningHours: { periods: [] } });
+    const unknown = rawPlace('unknown-food', 'restaurant', 12.973,
+      { currentOpeningHours: undefined });
+    const deps = dependencies([open, closed, unknown]);
+    const result = await createPlan(input(), { deps, now: NOW, hoursEnabled: true });
+    expect(result.status).toBe('provisional');
+    expect(result.provisionalPlans.length).toBeGreaterThan(0);
+    expect(result.provisionalPlans.every(plan => plan.stops.every(stop => stop.placeId !== 'closed-food'))).toBe(true);
+    expect(result.provisionalPlans.some(plan => plan.stops.some(stop => stop.hoursValidation.status === 'unknown'))).toBe(true);
+    expect(result.provisionalPlans.every(plan => plan.stops.every(stop => stop.hoursValidation.status !== 'closed'))).toBe(true);
+    expect(result.usage.routeElements).toBe(12);
+    expect(deps.discoverPlaces).toHaveBeenCalledTimes(1);
+    expect(deps.computeRouteMatrix).toHaveBeenCalledTimes(1);
+  });
+
   test('no candidates and fixed-schedule movies do not trigger Routes or fictional fallback', async () => {
     const empty = dependencies([]);
     const absent = await createPlan(input(), { deps: empty, now: NOW });
